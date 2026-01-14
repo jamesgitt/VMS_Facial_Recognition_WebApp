@@ -2,23 +2,22 @@
 # Model Testing Script
 # Tests model loading, initialization, face detection, and face recognition on sample images
 #
-# TODO Backbone List for Model Testing:
-#
 # 1. SETUP & IMPORTS
 #    - Import cv2, numpy, os, sys
+import cv2
+import numpy as np
+import os
+import sys
 #    - Import inference functions from inference.py
+import inference
 #    - Define test image paths/directory
 #    - Define models directory path (should match inference.py)
-#
-# 2. TEST MODEL LOADING & INITIALIZATION
-#    - Create test_model_loading() function
-#    - Test loading YuNet model from models directory
-#    - Test loading Sface model from models directory
-#    - Verify models are not None after initialization
-#    - Test error handling for missing model files
-#    - Print success/failure messages with model info
-#    - Return True/False for test result
-#
+TEST_IMAGE_DIR = 'test_images'
+MODELS_DIR = 'models'
+
+# Test image paths
+TEST_IMAGE_PATH = os.path.join(TEST_IMAGE_DIR, 'test_image.jpg')
+
 # 3. TEST FACE DETECTION ON SAMPLE IMAGES
 #    - Create test_face_detection() function
 #    - Load sample test image(s) using cv2.imread()
