@@ -20,8 +20,9 @@ SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/fac
 # - Define models directory path
 # - Get or create models directory
 # - Handle relative/absolute paths
+# - In Docker: MODELS_PATH is /app/app/models, default to "models" relative to working directory
 
-models_dir = "models"
+models_dir = os.environ.get("MODELS_PATH", "models")
 os.makedirs(models_dir, exist_ok=True)
 yunet_filepath = os.path.join(models_dir, "face_detection_yunet_2023mar.onnx")
 sface_filepath = os.path.join(models_dir, "face_recognition_sface_2021dec.onnx")

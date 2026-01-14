@@ -20,7 +20,12 @@ import os
 
 # Get the directory where this script is located
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODELS_DIR = os.path.join(_SCRIPT_DIR, 'models')
+
+# Check for MODELS_PATH environment variable first (for Docker), then use default
+# In Docker: MODELS_PATH is set to /app/app/models
+# Locally: defaults to models/ relative to script directory
+MODELS_DIR = os.environ.get("MODELS_PATH", os.path.join(_SCRIPT_DIR, 'models'))
+DEFAULT_MODELS_DIR = MODELS_DIR
 
 YUNET_FILENAME = 'face_detection_yunet_2023mar.onnx'
 SFACE_FILENAME = 'face_recognition_sface_2021dec.onnx'

@@ -35,6 +35,8 @@ DEFAULT_SCORE_THRESHOLD = 0.6
 DEFAULT_COMPARE_THRESHOLD = 0.363
 MAX_IMAGE_SIZE = 1920, 1920
 ALLOWED_FORMATS = {"jpg", "jpeg", "png"}
+# In Docker: working directory is /app/app, models are in /app/app/models
+# Use environment variable if set, otherwise default to "models" relative to working directory
 MODELS_PATH = os.environ.get("MODELS_PATH", "models")
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get("CORS_ORIGINS") else ["*"]
 
@@ -275,10 +277,22 @@ async def extract_features_api(
         img_np = decode_base64_image(image_base64)
     # Validate image size
     validate_image_size((img_np.shape[1], img_np.shape[0]))
-    feats, num_faces = inference.extract_face_features(img_np, detector=face_detector, recognizer=face_recognizer)
+    
+    # Detect faces first
+    faces = inference.detect_faces(img_np, return_landmarks=True)
+    if faces is None or len(faces) == 0:
+        return FeatureExtractionResponse(features=[], num_faces=0)
+    
+    # Extract features for each detected face
+    features_list = []
+    for face_row in faces:
+        feature = inference.extract_face_features(img_np, face_row)
+        if feature is not None:
+            features_list.append(feature.tolist() if hasattr(feature, 'tolist') else list(feature))
+    
     return FeatureExtractionResponse(
-        features=feats,
-        num_faces=num_faces
+        features=features_list,
+        num_faces=len(features_list)
     )
 
 
@@ -391,7 +405,7 @@ async def batch_detect_api(
             img_np = uploadfile_to_np(imgfile)
             validate_image_size((img_np.shape[1], img_np.shape[0]))
             results = inference.detect_faces(
-                img_np, detector=face_detector, score_threshold=score_threshold, return_landmarks=False
+                img_np, score_threshold=score_threshold, return_landmarks=False
             )
             faces = []
             for det in results.get("faces", []):
@@ -418,7 +432,21 @@ async def model_status():
 
 @app.get("/models/info", response_model=ModelInfoResponse, tags=["Models"])
 async def model_info():
-    info = inference.get_model_info(MODELS_PATH)
+    # Return basic model information
+    info = {
+        "detector": {
+            "type": "YuNet",
+            "model_path": inference.YUNET_PATH,
+            "input_size": inference.YUNET_INPUT_SIZE,
+            "loaded": face_detector is not None
+        },
+        "recognizer": {
+            "type": "Sface",
+            "model_path": inference.SFACE_PATH,
+            "similarity_threshold": inference.SFACE_SIMILARITY_THRESHOLD,
+            "loaded": face_recognizer is not None
+        }
+    }
     return ModelInfoResponse(detector=info.get("detector"), recognizer=info.get("recognizer"))
 
 @app.post("/validate-image", response_model=ValidateImageResponse, tags=["Utility"])
