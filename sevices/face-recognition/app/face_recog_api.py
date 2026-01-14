@@ -6,12 +6,14 @@ Implements endpoints for:
 - POST /detect           : Detect faces in an image.
 - POST /extract-features : Extract face features/vectors for detected faces.
 - POST /compare          : Compare faces between two images.
+- POST /api/va/recognize : Recognize visitor (test database from test_images)
 - GET  /health           : Health check.
 - GET  /models/status    : Model loading status.
 - GET  /models/info      : Model metadata.
 - POST /validate-image   : Validate image before processing.
-
+- WEBSOCKET /ws/face     : Real-time face detection/recognition via websocket.
 """
+
 import os
 import io
 import json
@@ -21,7 +23,7 @@ from typing import List, Tuple, Optional, Any
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -40,6 +42,11 @@ ALLOWED_FORMATS = {"jpg", "jpeg", "png"}
 MODELS_PATH = os.environ.get("MODELS_PATH", "models")
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get("CORS_ORIGINS") else ["*"]
 
+# --- GLOBAL TEST VISITORS SETUP ---
+# This section will load all reference visitors/faces from test_images on startup
+
+VISITOR_IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test_images")
+VISITOR_FEATURES = {}  # Dict[str, Dict]: {visitor_name: {'feature': np.array, 'path': str}}
 
 # --- FASTAPI APP INITIALIZATION ---
 app = FastAPI(
@@ -62,7 +69,7 @@ face_recognizer = None
 
 @app.on_event("startup")
 def load_models():
-    global face_detector, face_recognizer
+    global face_detector, face_recognizer, VISITOR_FEATURES
     try:
         face_detector = inference.get_face_detector(MODELS_PATH)
         face_recognizer = inference.get_face_recognizer(MODELS_PATH)
@@ -71,6 +78,37 @@ def load_models():
         face_detector = None
         face_recognizer = None
 
+    # Load visitor images and precompute features from test_images
+    VISITOR_FEATURES.clear()
+    if os.path.isdir(VISITOR_IMAGES_DIR):
+        print(f"Loading gallery visitors from {VISITOR_IMAGES_DIR}")
+        for fname in os.listdir(VISITOR_IMAGES_DIR):
+            if not fname.lower().endswith(tuple(ALLOWED_FORMATS)):
+                continue
+            fpath = os.path.join(VISITOR_IMAGES_DIR, fname)
+            try:
+                # Read via PIL and CV2
+                img = Image.open(fpath)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img_np = np.array(img)
+                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+                # Detect face(s)
+                faces = inference.detect_faces(img_cv, return_landmarks=True)
+                if faces is None or len(faces) == 0:
+                    print(f"No face found in {fname}")
+                    continue
+                # Take only first face for that file
+                feature = inference.extract_face_features(img_cv, faces[0])
+                if feature is not None:
+                    visitor_name = os.path.splitext(fname)[0]
+                    VISITOR_FEATURES[visitor_name] = {
+                        "feature": feature,
+                        "path": fpath
+                    }
+            except Exception as e:
+                print(f"Failed to process {fname}: {e}")
 
 # --- PYDANTIC SCHEMAS ---
 class DetectionRequest(BaseModel):
@@ -123,6 +161,10 @@ class ValidateImageResponse(BaseModel):
     format: Optional[str]
     size: Optional[Tuple[int, int]]
 
+class VisitorRecognitionResponse(BaseModel):
+    visitor: Optional[str]
+    match_score: Optional[float]
+    matches: Optional[list] = None
 
 # --- IMAGE PROCESSING UTILITIES ---
 def decode_base64_image(img_b64: str) -> np.ndarray:
@@ -159,7 +201,6 @@ def validate_image_size(size: Tuple[int, int]):
     if w > max_w or h > max_h:
         raise ValueError(f"Image dimensions too large: {w}x{h}, max is {MAX_IMAGE_SIZE}")
 
-
 # --- ERROR HANDLING ---
 @app.exception_handler(ValueError)
 async def valueerror_handler(request, exc):
@@ -175,7 +216,6 @@ async def filenotfounderror_handler(request, exc):
         content={"error": str(exc), "type": "FileNotFoundError"},
     )
 
-
 # --- API ROUTES ---
 
 @app.get("/health", tags=["Health"])
@@ -185,7 +225,6 @@ def health():
 @app.get("/api/v1/health", tags=["Health"])
 def health_v1():
     return {"status": "ok", "time": datetime.datetime.utcnow().isoformat() + "Z"}
-
 
 class DetectRequest(BaseModel):
     image: str
@@ -295,7 +334,6 @@ async def extract_features_api(
         num_faces=len(features_list)
     )
 
-
 @app.post("/api/v1/compare", response_model=RecognitionResponse, tags=["Recognition"])
 async def compare_faces_api_v1(request: CompareRequest):
     """Compare faces endpoint that accepts JSON with base64 images"""
@@ -394,6 +432,57 @@ async def compare_faces_api(
     )
 
 
+@app.post("/api/va/recognize", response_model=VisitorRecognitionResponse, tags=["Recognition"])
+async def recognize_visitor_api(
+    image: UploadFile = File(None),
+    image_base64: str = Form(None),
+    threshold: float = Form(DEFAULT_COMPARE_THRESHOLD),
+):
+    """
+    Recognize visitor by matching the input image to test gallery (test_images/), returns top match.
+    """
+    if image is None and not image_base64:
+        raise HTTPException(status_code=400, detail="An image (file or base64) must be provided.")
+    # Load received image
+    if image is not None:
+        img_np = uploadfile_to_np(image)
+    else:
+        img_np = decode_base64_image(image_base64)
+    # Validate image size
+    validate_image_size((img_np.shape[1], img_np.shape[0]))
+
+    # Detect faces in input
+    faces = inference.detect_faces(img_np, return_landmarks=True)
+    if faces is None or len(faces) == 0:
+        return VisitorRecognitionResponse(visitor=None, match_score=None, matches=[])
+
+    # Extract feature for first detected face
+    query_feature = inference.extract_face_features(img_np, faces[0])
+    if query_feature is None:
+        return VisitorRecognitionResponse(visitor=None, match_score=None, matches=[])
+
+    # Compare to all loaded visitor features
+    results = []
+    for visitor_name, visitor in VISITOR_FEATURES.items():
+        db_feature = visitor.get("feature")
+        score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
+        results.append({
+            "visitor": visitor_name,
+            "match_score": float(score),
+            "is_match": bool(is_match),
+            "filename": os.path.basename(visitor.get("path", ""))
+        })
+    # Sort by match score descending (higher = better)
+    results.sort(key=lambda x: x["match_score"], reverse=True)
+    best_match = results[0] if results else None
+    recognized_name = best_match["visitor"] if best_match and best_match["is_match"] else None
+    match_score = best_match["match_score"] if best_match and best_match["is_match"] else None
+    return VisitorRecognitionResponse(
+        visitor=recognized_name,
+        match_score=match_score,
+        matches=results
+    )
+
 @app.post("/batch-detect", tags=["Batch"])
 async def batch_detect_api(
     images: List[UploadFile] = File(...),
@@ -466,6 +555,148 @@ async def validate_image_api(image: UploadFile = File(None), image_base64: str =
         return ValidateImageResponse(valid=valid, format=fmt, size=size)
     except Exception as e:
         return ValidateImageResponse(valid=False, format=None, size=None)
+
+# --- WEBSOCKET FOR REAL-TIME FACE DETECTION/RECOGNITION ---
+@app.websocket("/ws/face")
+async def websocket_face_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time face detection/recognition.
+    Accepts JSON messages specifying an "action" and required data (e.g., 'detect', 'compare', 'recognize').
+    Accepts images in Base64. Responds with detection/recognition results.
+    Example JSON request:
+    {
+        "action": "detect",
+        "image_base64": "...",
+        "score_threshold": 0.6,
+        "return_landmarks": false
+    }
+    """
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                req = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_json({"error": "Invalid JSON input", "ok": False})
+                continue
+
+            response = {}
+            try:
+                # Handle different actions: 'detect', 'compare', 'recognize'
+                action = req.get("action")
+                if action == "detect":
+                    # Face detection on single image
+                    image_b64 = req.get("image_base64")
+                    score_threshold = float(req.get("score_threshold", DEFAULT_SCORE_THRESHOLD))
+                    return_landmarks = bool(req.get("return_landmarks", False))
+                    if not image_b64:
+                        response = {"error": "image_base64 required", "ok": False}
+                    else:
+                        try:
+                            img_np = decode_base64_image(image_b64)
+                            validate_image_size((img_np.shape[1], img_np.shape[0]))
+                            dets = inference.detect_faces(img_np, score_threshold=score_threshold, return_landmarks=return_landmarks)
+                            faces_list = []
+                            if dets:
+                                for r in dets:
+                                    if return_landmarks:
+                                        faces_list.append(r.tolist() if hasattr(r, 'tolist') else list(r))
+                                    else:
+                                        faces_list.append([float(r[0]), float(r[1]), float(r[2]), float(r[3])])
+                            response = {
+                                "faces": faces_list,
+                                "count": len(faces_list),
+                                "ok": True
+                            }
+                        except Exception as ex:
+                            response = {"error": str(ex), "ok": False}
+                elif action == "compare":
+                    # Face comparison between two images
+                    image1_b64 = req.get("image1_base64")
+                    image2_b64 = req.get("image2_base64")
+                    threshold = float(req.get("threshold", DEFAULT_COMPARE_THRESHOLD))
+                    if not image1_b64 or not image2_b64:
+                        response = {"error": "image1_base64 and image2_base64 required", "ok": False}
+                    else:
+                        try:
+                            img1 = decode_base64_image(image1_b64)
+                            img2 = decode_base64_image(image2_b64)
+                            validate_image_size((img1.shape[1], img1.shape[0]))
+                            validate_image_size((img2.shape[1], img2.shape[0]))
+                            faces1 = inference.detect_faces(img1, return_landmarks=True)
+                            faces2 = inference.detect_faces(img2, return_landmarks=True)
+                            if not faces1 or not faces2:
+                                response = {"error": "No face detected in one or both images", "ok": False}
+                            else:
+                                feature1 = inference.extract_face_features(img1, faces1[0])
+                                feature2 = inference.extract_face_features(img2, faces2[0])
+                                if feature1 is None or feature2 is None:
+                                    response = {"error": "Failed to extract features", "ok": False}
+                                else:
+                                    score, is_match = inference.compare_face_features(feature1, feature2, threshold=threshold)
+                                    response = {
+                                        "similarity_score": float(score),
+                                        "is_match": bool(is_match),
+                                        "ok": True
+                                    }
+                        except Exception as ex:
+                            response = {"error": str(ex), "ok": False}
+                elif action == "recognize":
+                    # Recognize visitor among gallery
+                    image_b64 = req.get("image_base64")
+                    threshold = float(req.get("threshold", DEFAULT_COMPARE_THRESHOLD))
+                    if not image_b64:
+                        response = {"error": "image_base64 required", "ok": False}
+                    else:
+                        try:
+                            img_np = decode_base64_image(image_b64)
+                            validate_image_size((img_np.shape[1], img_np.shape[0]))
+                            faces = inference.detect_faces(img_np, return_landmarks=True)
+                            if not faces:
+                                response = {"visitor": None, "match_score": None, "matches": [], "ok": True}
+                            else:
+                                query_feature = inference.extract_face_features(img_np, faces[0])
+                                if query_feature is None:
+                                    response = {"visitor": None, "match_score": None, "matches": [], "ok": True}
+                                else:
+                                    results = []
+                                    for visitor_name, visitor in VISITOR_FEATURES.items():
+                                        db_feature = visitor.get("feature")
+                                        score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
+                                        results.append({
+                                            "visitor": visitor_name,
+                                            "match_score": float(score),
+                                            "is_match": bool(is_match),
+                                            "filename": os.path.basename(visitor.get("path", ""))
+                                        })
+                                    results.sort(key=lambda x: x["match_score"], reverse=True)
+                                    best_match = results[0] if results else None
+                                    recognized_name = best_match["visitor"] if best_match and best_match["is_match"] else None
+                                    match_score = best_match["match_score"] if best_match and best_match["is_match"] else None
+                                    response = {
+                                        "visitor": recognized_name,
+                                        "match_score": match_score,
+                                        "matches": results,
+                                        "ok": True
+                                    }
+                        except Exception as ex:
+                            response = {"error": str(ex), "ok": False}
+                else:
+                    response = {"error": "Unknown or missing action", "ok": False}
+            except Exception as ex:
+                response = {"error": str(ex), "ok": False}
+
+            await websocket.send_json(response)
+    except WebSocketDisconnect:
+        # Client disconnected; cleanup if needed
+        pass
+    except Exception as e:
+        # Catch all, try to tell client if possible
+        try:
+            await websocket.send_json({"error": str(e), "ok": False})
+        except Exception:
+            pass
 
 # --- MAIN ENTRYPOINT (for direct run, optional) ---
 if __name__ == "__main__":
