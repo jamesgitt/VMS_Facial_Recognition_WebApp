@@ -100,11 +100,11 @@ def download_model(model_key, models_dir):
             'hash': 'd41d8cd98f00b204e9800998ecf8427e'
         }
     }
-    # TODO: Check if model already exists, skip if valid
+    # Check if model already exists, skip if valid
     if model_info[model_key]['filename'] in os.listdir(models_dir):
         print(f"Model {model_key} already exists in {models_dir}")
         return True
-    # TODO: Try primary URLs
+    # Try primary URLs
     for url in model_info[model_key]['urls']:
         if download_file(url, os.path.join(models_dir, model_info[model_key]['filename']), model_key):
             return True
@@ -119,17 +119,26 @@ def download_model(model_key, models_dir):
             
 def main():
     """Main function to download all models"""
-    # TODO: Print header/start message
+    # Print header/start message
+    print("Downloading models...")
     
-    # TODO: Get/create models directory
-    
-    # TODO: Download each model (yunet, sface)
-    
-    # TODO: Print summary of results
-    
-    # TODO: Return success status
+    # Get/create models directory
+    os.makedirs(models_dir, exist_ok=True)
+    # Download each model (yunet, sface)
+    if download_model('yunet', models_dir):
+        print("YuNet model downloaded successfully")
+    else:
+        print("Failed to download YuNet model")
+    if download_model('sface', models_dir):
+        print("Sface model downloaded successfully")
+    else:
+        print("Failed to download Sface model")
+    # Print summary of results
+    print("Models downloaded successfully")
+    # Return success status
     pass
 
 if __name__ == "__main__":
-    # TODO: Call main() and exit with appropriate code
-    pass
+    # Call main() and exit with appropriate code
+    main()
+    exit(0 if all(download_model(model, models_dir) for model in ['yunet', 'sface']) else 1)
