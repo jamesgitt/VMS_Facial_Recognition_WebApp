@@ -63,19 +63,25 @@ def verify_file(filepath, expected_hash=None):
     Returns:
         bool: True if file is valid
     """
-    # TODO: Check if file exists
-    
-    # TODO: If expected_hash provided, calculate file hash and compare
-    
-    # TODO: Return True if valid, False otherwise
-    pass
+    # Check if file exists
+    if not os.path.exists(filepath):
+        print(f"File {filepath} does not exist")
+        return False
+    # If expected_hash provided, calculate file hash and compare
+    if expected_hash:
+        with open(filepath, 'rb') as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+        if file_hash != expected_hash:
+            print(f"File {filepath} hash mismatch")
+            return False
+    return True
 
 def download_model(model_key, models_dir):
     """
-    Download a single model, trying multiple URLs if needed
+    Download models from multiple URLs
     
     Args:
-        model_key: 'yunet' or 'sface'
+        model_key: model name
         models_dir: Directory to save models
     
     Returns:
