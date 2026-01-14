@@ -87,19 +87,36 @@ def download_model(model_key, models_dir):
     Returns:
         bool: True if successful
     """
-    # TODO: Get model info (URL, filename) from configuration
-    
+    # Get model info (URL, filename) from configuration
+    model_info = {
+        'yunet': {
+            'url': YUNET_URL,
+            'filename': 'face_detection_yunet_2023mar.onnx',
+            'hash': 'd41d8cd98f00b204e9800998ecf8427e'
+        },
+        'sface': {
+            'url': SFACE_URL,
+            'filename': 'face_recognition_sface_2021dec.onnx',
+            'hash': 'd41d8cd98f00b204e9800998ecf8427e'
+        }
+    }
     # TODO: Check if model already exists, skip if valid
-    
-    # TODO: Try primary URL first
-    
-    # TODO: If primary fails, try alternative URLs
-    
-    # TODO: Verify downloaded file
-    
-    # TODO: Return True on success, False on failure
-    pass
-
+    if model_info[model_key]['filename'] in os.listdir(models_dir):
+        print(f"Model {model_key} already exists in {models_dir}")
+        return True
+    # TODO: Try primary URLs
+    for url in model_info[model_key]['urls']:
+        if download_file(url, os.path.join(models_dir, model_info[model_key]['filename']), model_key):
+            return True
+    # If primary URLs fail, try alternative URLs
+    for url in model_info[model_key]['alternative_urls']:
+        if download_file(url, os.path.join(models_dir, model_info[model_key]['filename']), model_key):
+            return True
+    # Verify downloaded files
+    if not verify_file(os.path.join(models_dir, model_info[model_key]['filename']), model_info[model_key]['hash']):
+        print(f"Failed to verify model {model_key}")
+        return False
+            
 def main():
     """Main function to download all models"""
     # TODO: Print header/start message
