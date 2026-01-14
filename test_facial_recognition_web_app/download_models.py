@@ -21,7 +21,7 @@ SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/fac
 # - Get or create models directory
 # - Handle relative/absolute paths
 
-models_dir = "test_facial_recognition_web_app\models"
+models_dir = "models"
 os.makedirs(models_dir, exist_ok=True)
 yunet_filepath = os.path.join(models_dir, "face_detection_yunet_2023mar.onnx")
 sface_filepath = os.path.join(models_dir, "face_recognition_sface_2021dec.onnx")
