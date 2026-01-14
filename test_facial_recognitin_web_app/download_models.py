@@ -3,7 +3,6 @@ Model Download Script
 Downloads YuNet and Sface ONNX models for face detection and recognition
 """
 
-# TODO: Import required libraries
 # - urllib.request for downloading files
 # - os/pathlib for file path handling
 # - Optional: hashlib for file verification
@@ -12,15 +11,13 @@ import urllib.request
 import os
 import hashlib
 
-# TODO: Define model URLs and filenames
 # - YuNet model URL and filename
 # - Sface model URL and filename
-# - Optional: Add alternative URLs as backup
 
 YUNET_URL = "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx?download="
 SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx?download="
 
-# TODO: Define models directory path
+# - Define models directory path
 # - Get or create models directory
 # - Handle relative/absolute paths
 
@@ -41,16 +38,19 @@ def download_file(url, filepath, model_name):
     Returns:
         bool: True if successful
     """
-    # TODO: Add User-Agent header to avoid 403 errors
     
-    # TODO: Show download progress (optional)
+    # Add User-Agent header to avoid 403 errors
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
     
-    # TODO: Download file using urllib.request.urlretrieve()
-    
-    # TODO: Handle errors (HTTPError, URLError, etc.)
-    
-    # TODO: Return True on success, False on failure
-    pass
+    # Show download progress
+    print(f"Downloading {model_name} from {url}...")
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+        with open(filepath, 'wb') as out_file:
+            out_file.write(response.read())
+    print(f"Downloaded {model_name} to {filepath}")
+    return True
 
 def verify_file(filepath, expected_hash=None):
     """
