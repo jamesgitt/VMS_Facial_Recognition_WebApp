@@ -21,7 +21,7 @@ SFACE_URL = "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/fac
 # - Get or create models directory
 # - Handle relative/absolute paths
 
-models_dir = "test_facial_recognitin_web_app/models"
+models_dir = "test_facial_recognition_web_app/models"
 os.makedirs(models_dir, exist_ok=True)
 yunet_filepath = os.path.join(models_dir, "face_detection_yunet_2023mar.onnx")
 sface_filepath = os.path.join(models_dir, "face_recognition_sface_2021dec.onnx")
@@ -101,21 +101,19 @@ def download_model(model_key, models_dir):
         }
     }
     # Check if model already exists, skip if valid
-    if model_info[model_key]['filename'] in os.listdir(models_dir):
+    filepath = os.path.join(models_dir, model_info[model_key]['filename'])
+    if os.path.exists(filepath):
         print(f"Model {model_key} already exists in {models_dir}")
         return True
-    # Try primary URLs
-    for url in model_info[model_key]['urls']:
-        if download_file(url, os.path.join(models_dir, model_info[model_key]['filename']), model_key):
+    # Download from URL
+    if download_file(model_info[model_key]['url'], filepath, model_key):
+        # Verify downloaded file
+        if verify_file(filepath, model_info[model_key]['hash']):
             return True
-    # If primary URLs fail, try alternative URLs
-    for url in model_info[model_key]['alternative_urls']:
-        if download_file(url, os.path.join(models_dir, model_info[model_key]['filename']), model_key):
-            return True
-    # Verify downloaded files
-    if not verify_file(os.path.join(models_dir, model_info[model_key]['filename']), model_info[model_key]['hash']):
-        print(f"Failed to verify model {model_key}")
-        return False
+        else:
+            print(f"Failed to verify model {model_key}")
+            return False
+    return False
             
 def main():
     """Main function to download all models"""
