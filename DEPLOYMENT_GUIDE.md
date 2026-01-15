@@ -255,6 +255,18 @@ npm run dev
 
 ## Production Deployment
 
+**📘 For detailed production deployment instructions, see [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md)**
+
+### Quick Overview
+
+The production deployment guide covers:
+- VPS deployment (DigitalOcean, AWS EC2, etc.)
+- Cloud platform deployment (AWS, GCP, Azure)
+- Platform-as-a-Service (Railway, Render, Fly.io)
+- Reverse proxy & HTTPS setup (Nginx, Traefik)
+- Database setup (managed vs self-hosted)
+- Monitoring & maintenance
+
 ### Pre-Deployment Checklist
 
 - [ ] Review [SECURITY_AUDIT.md](./documentation/SECURITY_AUDIT.md)

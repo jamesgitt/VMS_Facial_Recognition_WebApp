@@ -6,7 +6,7 @@ import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
-  output: 'standalone', // Enable standalone output for Docker
+  output: 'standalone', // Enable standalone output for Docker (Vercel ignores this)
 };
 
 export default config;

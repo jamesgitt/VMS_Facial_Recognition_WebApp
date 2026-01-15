@@ -18,6 +18,27 @@ See [README_DOCKER.md](./README_DOCKER.md) for detailed Docker setup instruction
 
 ---
 
+## 🌐 Production Deployment
+
+**Ready to deploy to production?** Choose your deployment method:
+
+### Quick Deploy Options
+
+- **🚀 Vercel (100% Free)** - Deploy frontend to Vercel + backend to free services
+  - See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for step-by-step guide
+  - See [FREE_DEPLOYMENT_OPTIONS.md](./FREE_DEPLOYMENT_OPTIONS.md) for free tier combinations
+  - Best for: Quick deployment, completely free, Next.js optimized
+  - **Recommended Free Stack**: Vercel + Fly.io + Neon ($0/month)
+
+- **🐳 Full Stack Deployment** - Deploy everything together
+  - See [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md) for complete guides
+  - Covers: VPS, Cloud Platforms, Platform-as-a-Service
+  - Includes: Reverse Proxy, HTTPS, Database setup
+
+For local development setup, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).
+
+---
+
 ## Face Detection Pre-Processing
 
 This project pre-processes face detection data from Kaggle.
