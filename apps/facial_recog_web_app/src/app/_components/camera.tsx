@@ -3,13 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { env } from "~/env";
 
-interface Face {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 interface DetectionResponse {
   faces: number[][]; // Array of [x, y, w, h] arrays
   count: number;
@@ -38,7 +31,7 @@ export function FaceRecognitionCamera() {
   const [detectionThreshold, setDetectionThreshold] = useState(0.6);
   const [processInterval, setProcessInterval] = useState(3);
   const [apiUrl, setApiUrl] = useState(
-    env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
   );
   const [comparisonThreshold, setComparisonThreshold] = useState(0.363);
   const [referenceFace, setReferenceFace] = useState<string | null>(null);
@@ -52,7 +45,7 @@ export function FaceRecognitionCamera() {
   // Start camera
   const startCamera = useCallback(async () => {
     // Check if getUserMedia is available
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("Error: Camera API not available. Please use a modern browser with HTTPS or localhost.");
       return;
     }
@@ -255,10 +248,10 @@ export function FaceRecognitionCamera() {
 
     faces.forEach((face, index) => {
       // Handle array format [x, y, w, h]
-      const x = face[0] || 0;
-      const y = face[1] || 0;
-      const w = face[2] || 0;
-      const h = face[3] || 0;
+      const x = face[0] ?? 0;
+      const y = face[1] ?? 0;
+      const w = face[2] ?? 0;
+      const h = face[3] ?? 0;
 
       // Choose color based on comparison result
       let color = "#4CAF50"; // Green for detected
@@ -357,17 +350,19 @@ export function FaceRecognitionCamera() {
 
     // Only continue loop if still running
     if (isRunning) {
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        void processFrame();
+      });
     } else {
       animationFrameRef.current = undefined;
     }
-  }, [isRunning, processInterval, frameToBase64, detectFaces, drawResults]);
+  }, [isRunning, processInterval, frameToBase64, detectFaces, drawResults, compareFaces, enableComparison, referenceFace]);
 
   // Start processing when camera is running
   useEffect(() => {
     if (isRunning) {
       // Start the processing loop
-      processFrame();
+      void processFrame();
     } else {
       // Cancel any pending animation frames immediately when stopped
       if (animationFrameRef.current !== undefined) {
