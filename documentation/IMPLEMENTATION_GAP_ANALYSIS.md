@@ -4,6 +4,8 @@
 **Version Control**: Up to date  
 **Status**: Production-ready with minor alignment tasks remaining
 
+> 📚 **API Documentation**: See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for complete endpoint documentation with examples.
+
 ---
 
 ## 📋 Quick Status Summary
