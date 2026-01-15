@@ -374,7 +374,7 @@ async def detect_faces_api(
         count=len(faces_list)
     )
 
-@app.post("api/v1/extract-features", response_model=FeatureExtractionResponse, tags=["Features"])
+@app.post("/api/v1/extract-features", response_model=FeatureExtractionResponse, tags=["Features"])
 async def extract_features_api(
     image: UploadFile = File(None),
     image_base64: str = Form(None),
