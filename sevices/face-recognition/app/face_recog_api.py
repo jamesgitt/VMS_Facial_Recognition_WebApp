@@ -32,6 +32,14 @@ from PIL import Image
 
 import inference  # This should be your inference.py containing detection/recognition
 
+# Database integration (optional - falls back to test_images if not configured)
+try:
+    import database
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+    print("Warning: database module not available. Using test_images fallback.")
+
 # --- CONFIGURATION ---
 DEFAULT_SCORE_THRESHOLD = 0.6
 DEFAULT_COMPARE_THRESHOLD = 0.363
@@ -41,6 +49,14 @@ ALLOWED_FORMATS = {"jpg", "jpeg", "png"}
 # Use environment variable if set, otherwise default to "models" relative to working directory
 MODELS_PATH = os.environ.get("MODELS_PATH", "models")
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get("CORS_ORIGINS") else ["*"]
+
+# Database configuration
+USE_DATABASE = os.environ.get("USE_DATABASE", "false").lower() == "true"
+DB_TABLE_NAME = os.environ.get("DB_TABLE_NAME", "visitors")
+DB_VISITOR_ID_COLUMN = os.environ.get("DB_VISITOR_ID_COLUMN", "visitor_id")
+DB_IMAGE_COLUMN = os.environ.get("DB_IMAGE_COLUMN", "base64Image")
+DB_ACTIVE_ONLY = os.environ.get("DB_ACTIVE_ONLY", "false").lower() == "true"
+DB_VISITOR_LIMIT = int(os.environ.get("DB_VISITOR_LIMIT", "0")) or None  # 0 or None = no limit
 
 # --- GLOBAL TEST VISITORS SETUP ---
 # This section will load all reference visitors/faces from test_images on startup
@@ -78,37 +94,72 @@ def load_models():
         face_detector = None
         face_recognizer = None
 
-    # Load visitor images and precompute features from test_images
-    VISITOR_FEATURES.clear()
-    if os.path.isdir(VISITOR_IMAGES_DIR):
-        print(f"Loading gallery visitors from {VISITOR_IMAGES_DIR}")
-        for fname in os.listdir(VISITOR_IMAGES_DIR):
-            if not fname.lower().endswith(tuple(ALLOWED_FORMATS)):
-                continue
-            fpath = os.path.join(VISITOR_IMAGES_DIR, fname)
-            try:
-                # Read via PIL and CV2
-                img = Image.open(fpath)
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                img_np = np.array(img)
-                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+    # Initialize database connection if enabled
+    global USE_DATABASE
+    if USE_DATABASE and DB_AVAILABLE:
+        try:
+            if database.test_connection():
+                print("✓ Database connection successful")
+                # Initialize connection pool for better performance
+                database.init_connection_pool(min_conn=1, max_conn=5)
+            else:
+                print("⚠ Database connection failed, falling back to test_images")
+                USE_DATABASE = False
+        except Exception as e:
+            print(f"⚠ Database initialization error: {e}, falling back to test_images")
+            USE_DATABASE = False
 
-                # Detect face(s)
-                faces = inference.detect_faces(img_cv, return_landmarks=True)
-                if faces is None or len(faces) == 0:
-                    print(f"No face found in {fname}")
+    # Load visitor images from database or test_images (fallback)
+    VISITOR_FEATURES.clear()
+    
+    if USE_DATABASE and DB_AVAILABLE:
+        # Database mode: Don't pre-load features, extract on-the-fly during recognition
+        print("✓ Using database for visitor recognition (on-the-fly feature extraction)")
+        try:
+            visitors = database.get_visitor_images_from_db(
+                table_name=DB_TABLE_NAME,
+                visitor_id_column=DB_VISITOR_ID_COLUMN,
+                image_column=DB_IMAGE_COLUMN,
+                limit=DB_VISITOR_LIMIT,
+                active_only=DB_ACTIVE_ONLY
+            )
+            print(f"✓ Database has {len(visitors)} visitors available for recognition")
+        except Exception as e:
+            print(f"⚠ Error loading visitors from database: {e}, falling back to test_images")
+            USE_DATABASE = False
+    
+    # Fallback to test_images if database not available or failed
+    if not USE_DATABASE or not DB_AVAILABLE:
+        if os.path.isdir(VISITOR_IMAGES_DIR):
+            print(f"Loading gallery visitors from {VISITOR_IMAGES_DIR}")
+            for fname in os.listdir(VISITOR_IMAGES_DIR):
+                if not fname.lower().endswith(tuple(ALLOWED_FORMATS)):
                     continue
-                # Take only first face for that file
-                feature = inference.extract_face_features(img_cv, faces[0])
-                if feature is not None:
-                    visitor_name = os.path.splitext(fname)[0]
-                    VISITOR_FEATURES[visitor_name] = {
-                        "feature": feature,
-                        "path": fpath
-                    }
-            except Exception as e:
-                print(f"Failed to process {fname}: {e}")
+                fpath = os.path.join(VISITOR_IMAGES_DIR, fname)
+                try:
+                    # Read via PIL and CV2
+                    img = Image.open(fpath)
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    img_np = np.array(img)
+                    img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+                    # Detect face(s)
+                    faces = inference.detect_faces(img_cv, return_landmarks=True)
+                    if faces is None or len(faces) == 0:
+                        print(f"No face found in {fname}")
+                        continue
+                    # Take only first face for that file
+                    feature = inference.extract_face_features(img_cv, faces[0])
+                    if feature is not None:
+                        visitor_name = os.path.splitext(fname)[0]
+                        VISITOR_FEATURES[visitor_name] = {
+                            "feature": feature,
+                            "path": fpath
+                        }
+                except Exception as e:
+                    print(f"Failed to process {fname}: {e}")
+            print(f"Loaded {len(VISITOR_FEATURES)} visitors from test_images")
 
 # --- PYDANTIC SCHEMAS ---
 class DetectionRequest(BaseModel):
@@ -162,9 +213,13 @@ class ValidateImageResponse(BaseModel):
     size: Optional[Tuple[int, int]]
 
 class VisitorRecognitionResponse(BaseModel):
-    visitor: Optional[str]
-    match_score: Optional[float]
-    matches: Optional[list] = None
+    visitor_id: Optional[str] = None  # Database visitor ID
+    confidence: Optional[float] = None  # Match confidence score
+    matched: bool = False  # Whether a match was found above threshold
+    # Legacy fields for backward compatibility
+    visitor: Optional[str] = None  # Deprecated: use visitor_id
+    match_score: Optional[float] = None  # Deprecated: use confidence
+    matches: Optional[list] = None  # Additional match details (optional)
 
 # --- IMAGE PROCESSING UTILITIES ---
 def decode_base64_image(img_b64: str) -> np.ndarray:
@@ -432,56 +487,159 @@ async def compare_faces_api(
     )
 
 
-@app.post("/api/va/recognize", response_model=VisitorRecognitionResponse, tags=["Recognition"])
+@app.post("/api/v1/recognize", response_model=VisitorRecognitionResponse, tags=["Recognition"])
 async def recognize_visitor_api(
     image: UploadFile = File(None),
     image_base64: str = Form(None),
     threshold: float = Form(DEFAULT_COMPARE_THRESHOLD),
 ):
     """
-    Recognize visitor by matching the input image to test gallery (test_images/), returns top match.
+    Recognize visitor by matching the input image against database visitors.
+    Returns visitor_id, confidence, and matched status.
+    Falls back to test_images if database is not configured.
     """
     if image is None and not image_base64:
         raise HTTPException(status_code=400, detail="An image (file or base64) must be provided.")
+    
     # Load received image
     if image is not None:
         img_np = uploadfile_to_np(image)
     else:
         img_np = decode_base64_image(image_base64)
+    
     # Validate image size
     validate_image_size((img_np.shape[1], img_np.shape[0]))
 
     # Detect faces in input
     faces = inference.detect_faces(img_np, return_landmarks=True)
     if faces is None or len(faces) == 0:
-        return VisitorRecognitionResponse(visitor=None, match_score=None, matches=[])
+        return VisitorRecognitionResponse(
+            visitor_id=None, confidence=None, matched=False,
+            visitor=None, match_score=None, matches=[]
+        )
 
     # Extract feature for first detected face
     query_feature = inference.extract_face_features(img_np, faces[0])
     if query_feature is None:
-        return VisitorRecognitionResponse(visitor=None, match_score=None, matches=[])
+        return VisitorRecognitionResponse(
+            visitor_id=None, confidence=None, matched=False,
+            visitor=None, match_score=None, matches=[]
+        )
 
-    # Compare to all loaded visitor features
     results = []
-    for visitor_name, visitor in VISITOR_FEATURES.items():
-        db_feature = visitor.get("feature")
-        score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
-        results.append({
-            "visitor": visitor_name,
-            "match_score": float(score),
-            "is_match": bool(is_match),
-            "filename": os.path.basename(visitor.get("path", ""))
-        })
-    # Sort by match score descending (higher = better)
-    results.sort(key=lambda x: x["match_score"], reverse=True)
-    best_match = results[0] if results else None
-    recognized_name = best_match["visitor"] if best_match and best_match["is_match"] else None
-    match_score = best_match["match_score"] if best_match and best_match["is_match"] else None
-    return VisitorRecognitionResponse(
-        visitor=recognized_name,
-        match_score=match_score,
-        matches=results
-    )
+    best_match = None
+    best_score = 0.0
+
+    # Database mode: Query and extract features on-the-fly
+    if USE_DATABASE and DB_AVAILABLE:
+        try:
+            visitors = database.get_visitor_images_from_db(
+                table_name=DB_TABLE_NAME,
+                visitor_id_column=DB_VISITOR_ID_COLUMN,
+                image_column=DB_IMAGE_COLUMN,
+                limit=DB_VISITOR_LIMIT,
+                active_only=DB_ACTIVE_ONLY
+            )
+            
+            for visitor_data in visitors:
+                visitor_id = str(visitor_data.get(DB_VISITOR_ID_COLUMN))
+                base64_image = visitor_data.get(DB_IMAGE_COLUMN)
+                
+                if not base64_image:
+                    continue
+                
+                try:
+                    # Decode base64 image
+                    img_bytes = base64.b64decode(base64_image)
+                    img = Image.open(io.BytesIO(img_bytes))
+                    if img.mode != "RGB":
+                        img = img.convert("RGB")
+                    img_np_db = np.array(img)
+                    img_cv_db = cv2.cvtColor(img_np_db, cv2.COLOR_RGB2BGR)
+                    
+                    # Detect and extract features on-the-fly
+                    db_faces = inference.detect_faces(img_cv_db, return_landmarks=True)
+                    if db_faces is None or len(db_faces) == 0:
+                        continue
+                    
+                    db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
+                    if db_feature is None:
+                        continue
+                    
+                    # Compare features
+                    score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
+                    score_float = float(score)
+                    
+                    results.append({
+                        "visitor_id": visitor_id,
+                        "match_score": score_float,
+                        "is_match": bool(is_match),
+                    })
+                    
+                    # Track best match
+                    if is_match and score_float > best_score:
+                        best_score = score_float
+                        best_match = {
+                            "visitor_id": visitor_id,
+                            "match_score": score_float,
+                            "is_match": True
+                        }
+                        
+                except Exception as e:
+                    print(f"Error processing visitor {visitor_id}: {e}")
+                    continue
+                    
+        except Exception as e:
+            print(f"Database query error: {e}")
+            # Fall through to test_images fallback
+    
+    # Fallback: Use pre-loaded test_images features
+    if not USE_DATABASE or not DB_AVAILABLE or len(results) == 0:
+        for visitor_name, visitor in VISITOR_FEATURES.items():
+            db_feature = visitor.get("feature")
+            score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
+            score_float = float(score)
+            
+            results.append({
+                "visitor": visitor_name,  # Legacy: name instead of ID
+                "visitor_id": visitor_name,  # Use name as ID for test_images
+                "match_score": score_float,
+                "is_match": bool(is_match),
+                "filename": os.path.basename(visitor.get("path", ""))
+            })
+            
+            # Track best match
+            if is_match and score_float > best_score:
+                best_score = score_float
+                best_match = {
+                    "visitor_id": visitor_name,
+                    "visitor": visitor_name,  # Legacy
+                    "match_score": score_float,
+                    "is_match": True
+                }
+    
+    # Sort by match score descending
+    results.sort(key=lambda x: x.get("match_score", 0), reverse=True)
+    
+    # Prepare response
+    if best_match and best_match.get("is_match"):
+        return VisitorRecognitionResponse(
+            visitor_id=best_match.get("visitor_id"),
+            confidence=best_match.get("match_score"),
+            matched=True,
+            visitor=best_match.get("visitor"),  # Legacy
+            match_score=best_match.get("match_score"),  # Legacy
+            matches=results[:10]  # Top 10 matches
+        )
+    else:
+        return VisitorRecognitionResponse(
+            visitor_id=None,
+            confidence=None,
+            matched=False,
+            visitor=None,
+            match_score=None,
+            matches=results[:10] if results else []
+        )
 
 @app.post("/batch-detect", tags=["Batch"])
 async def batch_detect_api(
