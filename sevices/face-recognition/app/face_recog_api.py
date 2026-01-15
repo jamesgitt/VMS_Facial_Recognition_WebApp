@@ -38,7 +38,7 @@ try:
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
-    print("Warning: database module not available. Using test_images fallback.")
+    print("Warning: database module not available. Using test images fallback.")
 
 # --- CONFIGURATION ---
 DEFAULT_SCORE_THRESHOLD = 0.6
