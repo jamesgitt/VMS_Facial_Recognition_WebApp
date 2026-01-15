@@ -15,40 +15,52 @@ After installing Docker Desktop, make sure it's running (you'll see a whale icon
 
 ### 1. Start the Database
 
+**Option A: Start all services (recommended)**
 ```bash
-# Start PostgreSQL (and optional pgAdmin)
-docker compose -f docker-compose.db.yml up -d
+# Start everything (database + backend + frontend)
+docker compose up -d
 
 # Check if it's running
-docker compose -f docker-compose.db.yml ps
+docker compose ps
+```
+
+**Option B: Start only database**
+```bash
+# Start PostgreSQL (and optional pgAdmin) from separate file
+docker compose -f docker-compose.db.yml up -d
+
+# Or start only postgres from main file
+docker compose up -d postgres
 ```
 
 ### 2. Verify Connection
 
 ```bash
 # Test connection
-docker exec -it facial_recog_postgres psql -U postgres -d visitors_db -c "SELECT version();"
+docker exec -it facial_recog_postgres psql -U <your_user> -d <your_database> -c "SELECT version();"
 ```
 
 ### 3. Access pgAdmin (Optional)
 
 - URL: http://localhost:5050
-- Email: `admin@admin.com`
-- Password: `admin`
+- Email: `<your_pgadmin_email>`
+- Password: `<your_pgadmin_password>`
 
 ## 📋 Database Connection Details
 
 **Connection String:**
 ```
-postgresql://postgres:postgres@localhost:5432/visitors_db
+postgresql://<user>:<password>@localhost:5432/<database>
 ```
 
 **Individual Parameters:**
 - Host: `localhost`
 - Port: `5432`
-- Database: `visitors_db`
-- Username: `postgres`
-- Password: `postgres`
+- Database: `<your_database>`
+- Username: `<your_user>`
+- Password: `<your_password>`
+
+> **Note:** Do **not** hardcode credentials in code or documentation; use environment variables or a `.env` file.
 
 ## 🔧 Configuration
 
@@ -58,9 +70,9 @@ You can customize the database by setting environment variables in `docker-compo
 
 ```yaml
 environment:
-  POSTGRES_USER: your_user
-  POSTGRES_PASSWORD: your_password
-  POSTGRES_DB: your_database_name
+  POSTGRES_USER: <your_user>
+  POSTGRES_PASSWORD: <your_password>
+  POSTGRES_DB: <your_database_name>
 ```
 
 ### Port Configuration
@@ -107,7 +119,7 @@ CREATE TABLE visitors (
 pg_dump -h source_host -U source_user -d source_db -t visitors > visitors_backup.sql
 
 # Import into local database
-docker exec -i facial_recog_postgres psql -U postgres -d visitors_db < visitors_backup.sql
+docker exec -i facial_recog_postgres psql -U <your_user> -d <your_database> < visitors_backup.sql
 ```
 
 ### Method 2: Using pgAdmin
@@ -126,7 +138,7 @@ See `copy_data.py` for automated data copying.
 
 ```bash
 # Connect to database
-docker exec -it facial_recog_postgres psql -U postgres -d visitors_db
+docker exec -it facial_recog_postgres psql -U <your_user> -d <your_database>
 
 # Then run SQL commands (note: use quotes for case-sensitive column names)
 INSERT INTO visitors (id, "base64Image", "firstName", "lastName", "fullName", email, phone) VALUES
@@ -139,7 +151,7 @@ INSERT INTO visitors (id, "base64Image", "firstName", "lastName", "fullName", em
 
 ```bash
 # Using psql
-docker exec -it facial_recog_postgres psql -U postgres -d visitors_db
+docker exec -it facial_recog_postgres psql -U <your_user> -d <your_database>
 
 # Using Python
 python database/test_connection.py
@@ -150,7 +162,7 @@ python database/test_connection.py
 1. Set environment variables:
    ```bash
    export USE_DATABASE=true
-   export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitors_db
+   export DATABASE_URL=postgresql://<user>:<password>@localhost:5432/<database>
    ```
 
 2. Start the API:
@@ -185,17 +197,17 @@ docker compose -f docker-compose.db.yml logs -f postgres
 
 ### Access Database Shell
 ```bash
-docker exec -it facial_recog_postgres psql -U postgres -d visitors_db
+docker exec -it facial_recog_postgres psql -U <your_user> -d <your_database>
 ```
 
 ### Backup Database
 ```bash
-docker exec facial_recog_postgres pg_dump -U postgres visitors_db > backup.sql
+docker exec facial_recog_postgres pg_dump -U <your_user> <your_database> > backup.sql
 ```
 
 ### Restore Database
 ```bash
-docker exec -i facial_recog_postgres psql -U postgres -d visitors_db < backup.sql
+docker exec -i facial_recog_postgres psql -U <your_user> -d <your_database> < backup.sql
 ```
 
 ### Reset Database (⚠️ Deletes all data)
@@ -208,10 +220,10 @@ docker compose -f docker-compose.db.yml up -d
 
 ⚠️ **This setup is for LOCAL DEVELOPMENT ONLY**
 
-- Default credentials are weak (postgres/postgres)
-- Database is exposed on localhost
-- Do NOT use these credentials in production
-- Change passwords before deploying
+- Default credentials (such as `postgres`/`postgres`) are commonly used in local development, but **do not use them in production**.
+- Database is exposed on localhost by default.
+- Always use strong, unique passwords for your database accounts.
+- Store sensitive credentials in your `.env` file (not in code or docs).
 
 ## 🐛 Troubleshooting
 
@@ -238,7 +250,7 @@ ports:
 
 3. Verify health check:
    ```bash
-   docker exec facial_recog_postgres pg_isready -U postgres
+   docker exec facial_recog_postgres pg_isready -U <your_user>
    ```
 
 ### Permission Denied
@@ -252,6 +264,6 @@ sudo chown -R $USER:$USER ./database
 ## 📚 Next Steps
 
 1. Copy your production data to local database
-2. Update `.env` file with connection string
-3. Test face recognition API with database
+2. Update your `.env` file with an appropriate connection string (do **not** commit this file)
+3. Test face recognition API with the configured database
 4. Verify recognition works correctly

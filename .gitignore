@@ -91,3 +91,11 @@ build/
 *.backup
 database/*.sql
 !database/init.sql
+
+# Prisma generated files (if not intentionally committed)
+apps/facial_recog_web_app/generated/
+**/generated/prisma/
+
+# Example files (safe to commit)
+!.env.example
+!docker-compose.*.example

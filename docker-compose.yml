@@ -1,25 +1,87 @@
 version: '3.8'
 
 services:
-  # FastAPI Backend
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: facial_recog_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}  # ⚠️ Set POSTGRES_PASSWORD in .env file
+      POSTGRES_DB: ${POSTGRES_DB:-visitors_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - facial_recog_network
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: facial_recog_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}  # ⚠️ Set PGADMIN_PASSWORD in .env file
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - facial_recog_network
+    profiles:
+      - tools  # Only start with --profile tools
+
+  # FastAPI Backend (Face Recognition API)
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./sevices/face-recognition
+      dockerfile: Dockerfile
     container_name: facial_recog_backend
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
-      - ./models:/app/models:ro
+      - ./sevices/face-recognition/models:/app/app/models:ro
+      - ./sevices/face-recognition/test_images:/app/app/test_images:ro
     environment:
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://frontend:3000
-      - MODELS_PATH=/app/models
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://frontend:3000}
+      - MODELS_PATH=/app/app/models
+      - USE_DATABASE=${USE_DATABASE:-true}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-visitors_db}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-visitors_db}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DB_TABLE_NAME=${DB_TABLE_NAME:-visitors}
+      - DB_VISITOR_ID_COLUMN=${DB_VISITOR_ID_COLUMN:-id}
+      - DB_IMAGE_COLUMN=${DB_IMAGE_COLUMN:-base64Image}
+      - DB_VISITOR_LIMIT=${DB_VISITOR_LIMIT:-0}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - facial_recog_network
@@ -27,21 +89,28 @@ services:
   # Next.js Frontend
   frontend:
     build:
-      context: ./facial_recog_web_app
+      context: ./apps/facial_recog_web_app
       dockerfile: Dockerfile
     container_name: facial_recog_frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - SKIP_ENV_VALIDATION=true
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-visitors_db}
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - facial_recog_network
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
 
 networks:
   facial_recog_network:

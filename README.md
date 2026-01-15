@@ -1,4 +1,24 @@
-# Face Detection Pre-Processing
+# VMS Facial Recognition System
+
+A complete facial recognition system with web interface, REST API, and PostgreSQL database integration.
+
+## 🚀 Quick Start with Docker
+
+**Start everything with one command:**
+```bash
+docker compose up -d
+```
+
+This starts:
+- PostgreSQL database (port 5432)
+- Face Recognition API (port 8000)
+- Next.js Frontend (port 3000)
+
+See [README_DOCKER.md](./README_DOCKER.md) for detailed Docker setup instructions.
+
+---
+
+## Face Detection Pre-Processing
 
 This project pre-processes face detection data from Kaggle.
 
