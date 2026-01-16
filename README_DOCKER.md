@@ -3,10 +3,12 @@
 ## Overview
 
 The project uses a **single `docker-compose.yml` file** that includes all services:
-- **PostgreSQL Database** - Visitor data storage
+- **PostgreSQL Database** - Visitor data storage (perfect for local testing!)
 - **pgAdmin** (optional) - Database management UI
 - **Face Recognition API** - FastAPI backend service
 - **Next.js Frontend** - Web application
+
+**💡 Note**: The local Docker database is perfect for testing and development. You only need to deploy a database when deploying services to production. See [LOCAL_VS_DEPLOYED_DB.md](./LOCAL_VS_DEPLOYED_DB.md) for details.
 
 ## Quick Start
 

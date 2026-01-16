@@ -11,6 +11,11 @@ This guide covers deploying the VMS Facial Recognition System using **Vercel for
 - **Backend (FastAPI)**: Deploy to Railway, Render, Fly.io, or VPS
 - **Database (PostgreSQL)**: Use managed database or deploy separately
 
+**When to use local Docker DB vs deployed DB:**
+- ✅ **Local Docker DB**: Perfect for testing, development, and local runs
+- ✅ **Deployed DB**: Only needed when deploying frontend/backend to production
+- 💡 **Best Practice**: Test locally with Docker DB, deploy DB only when deploying services
+
 **Why this approach?**
 - Vercel is optimized for Next.js and offers a generous free tier
 - Backend and database need different hosting (Vercel doesn't support long-running Python services)
