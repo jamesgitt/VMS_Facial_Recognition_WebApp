@@ -22,6 +22,9 @@ ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=true
 ENV DOCKER_BUILD=true
 
+# Generate Prisma Client with correct binary targets for Alpine Linux
+RUN npx prisma generate
+
 # Build Next.js
 RUN npm run build
 
@@ -39,6 +42,7 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/generated ./generated
 
 USER nextjs
 
