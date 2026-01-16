@@ -7,7 +7,7 @@ import { useState } from "react";
 export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -107,7 +107,7 @@ export default function SignInPage() {
         </form>
 
         <p className="mt-4 text-center text-sm text-white/70">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <a href="/register" className="text-purple-300 hover:text-purple-200">
             Create account
           </a>

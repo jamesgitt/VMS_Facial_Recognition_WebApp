@@ -50,8 +50,12 @@ export const authConfig = {
         try {
           // Normalize email (lowercase and trim)
           // Type assertion needed because credentials types are generic
-          const email = String(credentials.email).toLowerCase().trim();
-          const password = String(credentials.password);
+          const email = typeof credentials.email === "string" 
+            ? credentials.email.toLowerCase().trim()
+            : String(credentials.email).toLowerCase().trim();
+          const password = typeof credentials.password === "string"
+            ? credentials.password
+            : String(credentials.password);
           
           // Find user by email
           const user = await db.user.findUnique({

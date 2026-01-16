@@ -11,12 +11,12 @@ const registerSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as unknown;
     const validatedData = registerSchema.parse(body);
-    let { email, password, name } = validatedData;
+    const { email: rawEmail, password, name } = validatedData;
 
     // Normalize email (lowercase and trim)
-    email = email.toLowerCase().trim();
+    const email = rawEmail.toLowerCase().trim();
 
     // Check if user already exists
     const existingUser = await db.user.findUnique({
@@ -43,7 +43,8 @@ export async function POST(request: Request) {
     });
 
     // Don't return password hash
-    const { password: _, ...userWithoutPassword } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _password, ...userWithoutPassword } = user;
 
     return NextResponse.json(
       { 

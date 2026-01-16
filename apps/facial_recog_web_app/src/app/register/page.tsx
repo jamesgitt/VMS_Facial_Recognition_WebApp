@@ -32,10 +32,10 @@ export default function RegisterPage() {
         }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; message?: string };
 
       if (!res.ok) {
-        setError(data.error || "Registration failed");
+        setError(data.error ?? "Registration failed");
         setLoading(false);
         return;
       }
