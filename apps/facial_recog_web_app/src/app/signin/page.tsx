@@ -19,20 +19,35 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
+      // Normalize email (lowercase and trim) to match auth config
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log("[SignIn] Attempting to sign in with email:", normalizedEmail);
+      
       const result = await signIn("credentials", {
-        email,
+        email: normalizedEmail,
         password,
         redirect: false,
       });
 
+      console.log("[SignIn] Sign in result:", result);
+
       if (result?.error) {
-        setError("Invalid email or password");
+        console.error("[SignIn] Sign in error:", result.error);
+        setError(result.error === "CredentialsSignin" 
+          ? "Invalid email or password" 
+          : `Sign in failed: ${result.error}`);
         setLoading(false);
       } else if (result?.ok) {
+        console.log("[SignIn] Sign in successful, redirecting...");
         router.push(callbackUrl);
         router.refresh();
+      } else {
+        console.warn("[SignIn] Unexpected result:", result);
+        setError("Unexpected response. Please try again.");
+        setLoading(false);
       }
     } catch (err) {
+      console.error("[SignIn] Exception during sign in:", err);
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }
@@ -94,9 +109,15 @@ export default function SignInPage() {
         <p className="mt-4 text-center text-sm text-white/70">
           Don't have an account?{" "}
           <a href="/register" className="text-purple-300 hover:text-purple-200">
-            Register here
+            Create account
           </a>
         </p>
+        
+        {searchParams.get("registered") === "true" && (
+          <div className="mt-4 rounded-md bg-green-500/20 p-3 text-sm text-green-200">
+            Account created! Please sign in with your credentials.
+          </div>
+        )}
       </div>
     </div>
   );

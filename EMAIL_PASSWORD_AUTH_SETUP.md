@@ -4,6 +4,14 @@
 
 The app now uses simple **Email/Password authentication**. No external OAuth providers needed!
 
+**Features:**
+- ✅ Email normalization (lowercase, trimmed)
+- ✅ Secure password hashing with bcryptjs
+- ✅ Custom sign-in page at `/signin`
+- ✅ Registration API at `/api/register`
+- ✅ JWT-based sessions
+- ✅ Detailed logging for debugging
+
 ---
 
 ## Quick Setup
