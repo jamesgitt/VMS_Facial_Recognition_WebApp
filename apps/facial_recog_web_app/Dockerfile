@@ -14,6 +14,7 @@ RUN npm ci
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+# Copy all source files (Docker will cache this layer, rebuild with --no-cache if changes don't appear)
 COPY . .
 
 # Set environment variables for build
