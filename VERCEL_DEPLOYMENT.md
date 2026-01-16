@@ -345,7 +345,7 @@ Choose one of these options (all have free tiers):
 
 3. **Environment Variables**:
    Click "Environment Variables" and add:
-   ```env
+   ```env   
    # API URL (from Step 1)
    NEXT_PUBLIC_API_URL=https://your-backend.railway.app
    
@@ -355,10 +355,15 @@ Choose one of these options (all have free tiers):
    # Authentication (generate with: openssl rand -base64 32)
    AUTH_SECRET=your-generated-secret
    
+   # Skip environment validation during build (IMPORTANT!)
+   SKIP_ENV_VALIDATION=true
+   
    # Optional: Discord OAuth
    AUTH_DISCORD_ID=your-discord-id
    AUTH_DISCORD_SECRET=your-discord-secret
    ```
+   
+   **⚠️ Important**: Make sure to add `SKIP_ENV_VALIDATION=true` to prevent build failures!
 
 4. **Deploy**:
    - Click "Deploy"
@@ -392,7 +397,11 @@ Choose one of these options (all have free tiers):
    vercel env add NEXT_PUBLIC_API_URL
    vercel env add DATABASE_URL
    vercel env add AUTH_SECRET
+   vercel env add SKIP_ENV_VALIDATION
+   # When prompted, enter: true
    ```
+   
+   **⚠️ Important**: Don't forget `SKIP_ENV_VALIDATION=true`!
 
 6. **Redeploy with Environment Variables**:
    ```bash
@@ -434,36 +443,65 @@ Add all relevant URLs to CORS_ORIGINS.
 
 ---
 
+## 🐛 Troubleshooting 404 Errors
+
+If you encounter a **404: NOT_FOUND** error:
+
+1. **Check Root Directory**: 
+   - Go to Settings → General → Root Directory
+   - Set to: `apps/facial_recog_web_app`
+   - Click "Save"
+
+2. **Add `SKIP_ENV_VALIDATION=true`**:
+   - Go to Settings → Environment Variables
+   - Add: `SKIP_ENV_VALIDATION` = `true`
+   - This is **required** to prevent build failures
+
+3. **Check Build Logs**:
+   - Go to your deployment
+   - Click "Build Logs" tab
+   - Look for specific error messages
+
+4. **Verify Environment Variables**:
+   - All required variables must be set (see Step 2 above)
+   - Make sure they're set for all environments (Production, Preview, Development)
+
+**See [VERCEL_TROUBLESHOOTING.md](./VERCEL_TROUBLESHOOTING.md) for detailed troubleshooting steps.**
+
+---
+
 ## 🔧 Configuration Files
 
 ### Vercel Configuration (`apps/facial_recog_web_app/vercel.json`)
 
-If you need custom configuration, create or update `vercel.json`:
+The `vercel.json` file is minimal - Vercel auto-detects Next.js:
 
 ```json
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@next_public_api_url"
-  }
+  "regions": ["iad1"]
 }
 ```
+
+**Note**: Vercel auto-detects Next.js, so you can even remove `vercel.json` if you want. The minimal version above is sufficient.
 
 ### Next.js Configuration
 
 Ensure `next.config.js` is configured correctly:
 
 ```javascript
+import "./src/env.js";
+
 /** @type {import("next").NextConfig} */
 const config = {
-  output: 'standalone', // Not needed for Vercel, but good for other platforms
+  // Only use standalone for Docker builds, not Vercel
+  ...(process.env.DOCKER_BUILD === "true" ? { output: 'standalone' } : {}),
 };
 
 export default config;
 ```
+
+**Note**: The `output: 'standalone'` is only used for Docker builds. Vercel uses its own optimized output.
 
 ---
 
