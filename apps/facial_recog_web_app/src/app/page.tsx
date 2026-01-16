@@ -5,11 +5,23 @@ import { auth } from "~/server/auth";
 import { api, HydrateClient } from "~/trpc/server";
 
 export default async function Home() {
-  const hello = await api.post.hello({ text: "from tRPC" });
-  const session = await auth();
-
-  if (session?.user) {
-    void api.post.getLatest.prefetch();
+  // Wrap in try-catch to prevent build failures
+  let hello = null;
+  let session = null;
+  
+  try {
+    hello = await api.post.hello({ text: "from tRPC" });
+  } catch (error) {
+    console.error("tRPC error:", error);
+  }
+  
+  try {
+    session = await auth();
+    if (session?.user) {
+      void api.post.getLatest.prefetch();
+    }
+  } catch (error) {
+    console.error("Auth error:", error);
   }
 
   return (
