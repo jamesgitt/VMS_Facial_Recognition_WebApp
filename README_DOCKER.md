@@ -87,6 +87,10 @@ API_PORT=8000
 # Frontend
 FRONTEND_PORT=3000
 NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Authentication (Required for email/password auth)
+# Generate with: openssl rand -base64 32
+AUTH_SECRET=your-generated-secret-here
 ```
 
 ## Common Commands
@@ -212,6 +216,55 @@ cd apps/facial_recog_web_app
 npm run dev
 ```
 
+## Authentication Setup
+
+The frontend includes email/password authentication. After starting the services:
+
+1. **Access the frontend**: http://localhost:3000
+2. **Register a new account**: Click "Sign in" → "Create account" or go to http://localhost:3000/register
+3. **Sign in**: Use your registered email and password
+
+**Required Environment Variable:**
+- `AUTH_SECRET` - Generate with: `openssl rand -base64 32`
+
+See [EMAIL_PASSWORD_AUTH_SETUP.md](./EMAIL_PASSWORD_AUTH_SETUP.md) for detailed authentication setup.
+
+---
+
+## Authentication Setup
+
+The frontend includes **email/password authentication** with sign-in and registration pages.
+
+### Quick Setup
+
+1. **Set AUTH_SECRET in `.env`:**
+   ```bash
+   # Generate secret
+   openssl rand -base64 32
+   
+   # Add to .env
+   AUTH_SECRET=your-generated-secret-here
+   ```
+
+2. **Start services:**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Access the app:**
+   - Frontend: http://localhost:3000
+   - Register: http://localhost:3000/register
+   - Sign in: http://localhost:3000/signin
+
+4. **Create your first account:**
+   - Go to `/register`
+   - Enter email, password (min 6 chars), and optional name
+   - You'll be redirected to sign in
+
+See [EMAIL_PASSWORD_AUTH_SETUP.md](./EMAIL_PASSWORD_AUTH_SETUP.md) for detailed authentication documentation.
+
+---
+
 ## Troubleshooting
 
 ### Port Conflicts
@@ -240,6 +293,23 @@ FRONTEND_PORT=3001
    ```bash
    docker exec -it facial_recog_postgres psql -U postgres -c "SELECT version();"
    ```
+
+### Frontend Can't Connect to Backend API
+
+1. **Check NEXT_PUBLIC_API_URL:**
+   - Should be `http://localhost:8000` (for browser access)
+   - NOT `http://backend:8000` (that only works inside Docker network)
+   - Browser makes requests from your machine, not from inside Docker
+
+2. **Verify backend is accessible:**
+   ```bash
+   # Test from your machine
+   curl http://localhost:8000/api/v1/health
+   ```
+
+3. **Check CORS settings:**
+   - Backend `CORS_ORIGINS` should include `http://localhost:3000`
+   - Check backend logs: `docker compose logs backend`
 
 ### Backend Can't Connect to Database
 

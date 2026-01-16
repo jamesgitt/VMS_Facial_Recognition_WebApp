@@ -47,13 +47,15 @@ API_PORT=8000
 ```env
 # Frontend Configuration
 FRONTEND_PORT=3000
+
+# API URL (for browser to access backend)
+# Use http://localhost:8000 - browser makes requests from your machine
+# NOT http://backend:8000 (that only works inside Docker network)
 NEXT_PUBLIC_API_URL=http://localhost:8000
 
-# Authentication (NextAuth.js) - Optional for development
-# Generate AUTH_SECRET with: openssl rand -base64 32
+# Authentication (Required for email/password auth)
+# Generate with: openssl rand -base64 32
 AUTH_SECRET=CHANGE_ME_GENERATE_WITH_openssl_rand_base64_32
-AUTH_DISCORD_ID=your_discord_client_id_here
-AUTH_DISCORD_SECRET=your_discord_client_secret_here
 ```
 
 ## Complete .env File Example
@@ -86,10 +88,10 @@ API_PORT=8000
 # Next.js Frontend
 # ============================================
 FRONTEND_PORT=3000
+# API URL for browser access (always use localhost, not Docker service name)
 NEXT_PUBLIC_API_URL=http://localhost:8000
+# Authentication secret (generate with: openssl rand -base64 32)
 AUTH_SECRET=CHANGE_ME_GENERATE_WITH_openssl_rand_base64_32
-AUTH_DISCORD_ID=your_discord_client_id_here
-AUTH_DISCORD_SECRET=your_discord_client_secret_here
 ```
 
 ## Usage

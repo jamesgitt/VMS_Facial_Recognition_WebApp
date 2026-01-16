@@ -94,11 +94,18 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
+      # API URL: Use backend service name for internal Docker networking
+      # For browser access, this should be http://localhost:8000 (set in .env)
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       - SKIP_ENV_VALIDATION=true
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-visitors_db}
+      # Authentication (required for email/password auth)
+      # Generate with: openssl rand -base64 32
+      - AUTH_SECRET=${AUTH_SECRET:-change-me-in-production}
     depends_on:
       backend:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
     networks:
