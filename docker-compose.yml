@@ -47,14 +47,14 @@ services:
   # FastAPI Backend (Face Recognition API)
   backend:
     build:
-      context: ./sevices/face-recognition
+      context: ./services/face-recognition
       dockerfile: Dockerfile
     container_name: facial_recog_backend
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./sevices/face-recognition/models:/app/app/models:ro
-      - ./sevices/face-recognition/test_images:/app/app/test_images:ro
+      - ./services/face-recognition/models:/app/app/models:ro
+      - ./services/face-recognition/test_images:/app/app/test_images:ro
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://frontend:3000}
       - MODELS_PATH=/app/app/models

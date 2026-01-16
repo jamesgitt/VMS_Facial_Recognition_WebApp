@@ -204,7 +204,7 @@ docker compose up -d
 docker compose up -d postgres
 
 # Run API locally (outside Docker)
-cd sevices/face-recognition
+cd services/face-recognition
 python app/main.py
 
 # Run frontend locally (outside Docker)

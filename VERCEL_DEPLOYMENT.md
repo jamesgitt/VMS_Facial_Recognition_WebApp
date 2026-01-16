@@ -40,7 +40,7 @@ Choose one of these options (all have free tiers):
 4. **Add Backend Service**:
    - Click "New" → "GitHub Repo"
    - Select your repository
-   - Set root directory to `sevices/face-recognition`
+   - Set root directory to `services/face-recognition`
    - Railway will auto-detect Dockerfile
 
 5. **Configure Environment Variables**:
@@ -79,10 +79,10 @@ Choose one of these options (all have free tiers):
    - Connect GitHub repo
    - Settings:
      - **Name**: `facial-recognition-backend`
-     - **Root Directory**: `sevices/face-recognition`
+     - **Root Directory**: `services/face-recognition`
      - **Environment**: Docker
      - **Dockerfile Path**: `Dockerfile`
-     - **Docker Context**: `sevices/face-recognition`
+     - **Docker Context**: `services/face-recognition`
 
 4. **Environment Variables**:
    ```env
@@ -118,7 +118,7 @@ Choose one of these options (all have free tiers):
 
 3. **Create App**:
    ```bash
-   cd sevices/face-recognition
+   cd services/face-recognition
    fly launch
    ```
 
@@ -192,10 +192,10 @@ Choose one of these options (all have free tiers):
    - Connect GitHub repo
    - Settings:
      - **Name**: `facial-recognition-backend`
-     - **Root Directory**: `sevices/face-recognition`
+     - **Root Directory**: `services/face-recognition`
      - **Environment**: Docker
      - **Dockerfile Path**: `Dockerfile`
-     - **Docker Context**: `sevices/face-recognition`
+     - **Docker Context**: `services/face-recognition`
 
 3. **Environment Variables**:
    ```env
@@ -264,7 +264,7 @@ Choose one of these options (all have free tiers):
 
 3. **Build and Push Container**:
    ```bash
-   cd sevices/face-recognition
+   cd services/face-recognition
    gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/facial-recognition-api
    ```
 
@@ -295,7 +295,7 @@ Choose one of these options (all have free tiers):
 2. **Create New Repl**:
    - Import from GitHub
    - Choose Python template
-   - Set root to `sevices/face-recognition`
+   - Set root to `services/face-recognition`
 
 3. **Configure**:
    - Add environment variables in Secrets tab

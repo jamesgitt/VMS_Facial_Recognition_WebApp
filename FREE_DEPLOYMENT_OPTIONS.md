@@ -135,10 +135,10 @@ Quick reference for completely free deployment options for the VMS Facial Recogn
 4. Connect GitHub repo
 5. Settings:
    - **Name**: `facial-recognition-backend`
-   - **Root Directory**: `sevices/face-recognition`
+   - **Root Directory**: `services/face-recognition`
    - **Environment**: Docker
    - **Dockerfile Path**: `Dockerfile`
-   - **Docker Context**: `sevices/face-recognition`
+   - **Docker Context**: `services/face-recognition`
 6. Environment Variables:
    ```env
    USE_DATABASE=true

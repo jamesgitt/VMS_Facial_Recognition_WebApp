@@ -55,7 +55,7 @@ apps/facial_recog_web_app/generated/
 - `docker-compose.yml` (lines 10, 33): Fallback defaults `postgres`/`admin`
 - `database/copy_data.py` (line 33): Default `"postgres"`
 - `database/test_connection.py` (line 30): Default `"postgres"`
-- `sevices/face-recognition/app/database.py` (line 38): Default `""`
+- `services/face-recognition/app/database.py` (line 38): Default `""`
 
 **Risk**: Low - These are fallback defaults for development. Production should use `.env` files.
 
@@ -72,7 +72,7 @@ apps/facial_recog_web_app/generated/
 
 ### 2. CORS Wildcard in Default Configuration
 
-**File**: `sevices/face-recognition/app/face_recog_api.py` (line 67)
+**File**: `services/face-recognition/app/face_recog_api.py` (line 67)
 
 **Issue**: Default CORS allows all origins (`*`)
 
@@ -96,7 +96,7 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get(
 
 ### 3. Model Files Status Unclear
 
-**Directory**: `sevices/face-recognition/models/`
+**Directory**: `services/face-recognition/models/`
 
 **Issue**: `.gitignore` has `models/` and `*.onnx`, but model files exist in the directory.
 
@@ -133,7 +133,7 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get(
 
 ### 5. Error Message Sanitization
 
-**File**: `sevices/face-recognition/app/face_recog_api.py`
+**File**: `services/face-recognition/app/face_recog_api.py`
 
 **Issue**: Error messages may expose internal details (stack traces, file paths, etc.)
 
@@ -150,7 +150,7 @@ CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*").split(",") if os.environ.get(
 
 ### 6. Input Validation
 
-**File**: `sevices/face-recognition/app/face_recog_api.py`
+**File**: `services/face-recognition/app/face_recog_api.py`
 
 **Current**: Basic image size validation exists (`MAX_IMAGE_SIZE = 1920, 1920`)
 

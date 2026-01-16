@@ -740,4 +740,4 @@ async function detectFaces(imageFile: File) {
 For issues or questions, please refer to:
 - Implementation Gap Analysis: `documentation/IMPLEMENTATION_GAP_ANALYSIS.md`
 - Database Setup: `database/README.md`
-- ML Service README: `sevices/face-recognition/README.md`
+- ML Service README: `services/face-recognition/README.md`

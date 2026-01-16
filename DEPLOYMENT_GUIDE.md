@@ -163,7 +163,7 @@ docker compose -f docker-compose.db.yml up -d
 
 ```bash
 # Navigate to backend directory
-cd sevices/face-recognition
+cd services/face-recognition
 
 # Create virtual environment
 python -m venv venv
@@ -229,7 +229,7 @@ CREATE DATABASE visitors_db;
 #### 3. Set Up Backend
 
 ```bash
-cd sevices/face-recognition
+cd services/face-recognition
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
@@ -493,12 +493,12 @@ docker exec -it facial_recog_postgres psql -U postgres -d visitors_db
 
 ```bash
 # Verify models directory exists
-ls sevices/face-recognition/models/
+ls services/face-recognition/models/
 
 # Check MODELS_PATH environment variable
 echo $MODELS_PATH
 
-# Models should be in: sevices/face-recognition/models/
+# Models should be in: services/face-recognition/models/
 ```
 
 #### API Not Responding

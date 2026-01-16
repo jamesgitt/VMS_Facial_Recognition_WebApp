@@ -167,7 +167,7 @@ python database/test_connection.py
 
 2. Start the API:
    ```bash
-   cd sevices/face-recognition
+   cd services/face-recognition
    python app/main.py --reload
    ```
 

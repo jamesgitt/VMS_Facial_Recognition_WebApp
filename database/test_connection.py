@@ -10,8 +10,8 @@ import psycopg2
 # Load environment variables from .env file if it exists
 try:
     from dotenv import load_dotenv
-    # Try to load .env from sevices/face-recognition/.env
-    env_file = Path(__file__).parent.parent / "sevices" / "face-recognition" / ".env"
+    # Try to load .env from services/face-recognition/.env
+    env_file = Path(__file__).parent.parent / "services" / "face-recognition" / ".env"
     if env_file.exists():
         load_dotenv(env_file)
     # Also try root .env
