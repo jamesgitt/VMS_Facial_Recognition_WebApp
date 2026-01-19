@@ -37,6 +37,9 @@ Pillow
 opencv-python
 numpy
 
+# --- ANN Search (HNSW) ---
+hnswlib>=0.7.0
+
 # --- Misc/Utility (standard library: json, os, io, base64, datetime, typing, etc.) ---
 
 # DeepFace and TensorFlow - Note: TensorFlow requires Python 3.11 or 3.12

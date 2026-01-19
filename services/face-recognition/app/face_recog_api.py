@@ -59,14 +59,14 @@ except ImportError:
     DB_AVAILABLE = False
     print("Warning: database module not available. Using test images fallback.")
 
-# FAISS index for fast ANN search
+# HNSW index for fast ANN search
 try:
-    from faiss_index import FAISSIndexManager
-    FAISS_AVAILABLE = True
+    from hnsw_index import HNSWIndexManager
+    HNSW_AVAILABLE = True
 except ImportError:
-    FAISS_AVAILABLE = False
-    FAISSIndexManager = None
-    print("Warning: FAISS index manager not available. Using linear search.")
+    HNSW_AVAILABLE = False
+    HNSWIndexManager = None
+    print("Warning: HNSW index manager not available. Using linear search.")
 
 # --- CONFIGURATION ---
 DEFAULT_SCORE_THRESHOLD = 0.6
@@ -110,11 +110,11 @@ app.add_middleware(
 # --- GLOBAL INFERENCE/MODEL LOADING ---
 face_detector = None
 face_recognizer = None
-faiss_index_manager = None  # FAISS index for fast ANN search
+hnsw_index_manager = None  # HNSW index for fast ANN search
 
 @app.on_event("startup")
 def load_models():
-    global face_detector, face_recognizer, VISITOR_FEATURES, faiss_index_manager
+    global face_detector, face_recognizer, VISITOR_FEATURES, hnsw_index_manager
     try:
         face_detector = inference.get_face_detector(MODELS_PATH)
         face_recognizer = inference.get_face_recognizer(MODELS_PATH)
@@ -123,16 +123,16 @@ def load_models():
         face_detector = None
         face_recognizer = None
     
-    # Initialize FAISS index manager
-    if FAISS_AVAILABLE and FAISSIndexManager is not None:
+    # Initialize HNSW index manager
+    if HNSW_AVAILABLE and HNSWIndexManager is not None:
         try:
-            faiss_index_manager = FAISSIndexManager(index_dir=MODELS_PATH)
-            print("✓ FAISS index manager initialized")
+            hnsw_index_manager = HNSWIndexManager(index_dir=MODELS_PATH)
+            print("✓ HNSW index manager initialized")
         except Exception as e:
-            print(f"⚠ Error initializing FAISS index: {e}")
-            faiss_index_manager = None
+            print(f"⚠ Error initializing HNSW index: {e}")
+            hnsw_index_manager = None
     else:
-        faiss_index_manager = None
+        hnsw_index_manager = None
 
     # Initialize database connection if enabled
     global USE_DATABASE
@@ -171,7 +171,7 @@ def load_models():
             return None
     
     if USE_DATABASE and DB_AVAILABLE:
-        # Database mode: Build FAISS index if available, otherwise use on-the-fly extraction
+        # Database mode: Build HNSW index if available, otherwise use on-the-fly extraction
         print("✓ Using database for visitor recognition")
         try:
             visitors = database.get_visitor_images_from_db(
@@ -183,20 +183,20 @@ def load_models():
             )
             print(f"✓ Database has {len(visitors)} visitors available for recognition")
             
-            # Build FAISS index if available
-            if faiss_index_manager and len(visitors) > 0:
-                print("Building FAISS index from database visitors...")
+            # Build HNSW index if available
+            if hnsw_index_manager and len(visitors) > 0:
+                print("Building HNSW index from database visitors...")
                 def get_visitors():
                     return visitors
                 
-                count = faiss_index_manager.rebuild_from_database(
+                count = hnsw_index_manager.rebuild_from_database(
                     get_visitors_func=get_visitors,
                     extract_feature_func=extract_feature_from_visitor_data
                 )
                 if count > 0:
-                    print(f"✓ FAISS index built with {count} visitors (fast ANN search enabled)")
+                    print(f"✓ HNSW index built with {count} visitors (fast ANN search enabled)")
                 else:
-                    print("⚠ FAISS index build failed, falling back to linear search")
+                    print("⚠ HNSW index build failed, falling back to linear search")
         except Exception as e:
             print(f"⚠ Error loading visitors from database: {e}, falling back to test_images")
             USE_DATABASE = False
@@ -229,20 +229,20 @@ def load_models():
                             "path": fpath
                         }
                         
-                        # Add to FAISS index if available
-                        if faiss_index_manager:
+                        # Add to HNSW index if available
+                        if hnsw_index_manager:
                             batch_data.append((visitor_name, feature, {"path": fpath}))
                 except Exception as e:
                     print(f"Failed to process {fname}: {e}")
             
             print(f"Loaded {len(VISITOR_FEATURES)} visitors from test_images")
             
-            # Build FAISS index from test_images if available
-            if faiss_index_manager and batch_data:
-                count = faiss_index_manager.add_visitors_batch(batch_data)
+            # Build HNSW index from test_images if available
+            if hnsw_index_manager and batch_data:
+                count = hnsw_index_manager.add_visitors_batch(batch_data)
                 if count > 0:
-                    faiss_index_manager.save()
-                    print(f"✓ FAISS index built with {count} test_images visitors (fast ANN search enabled)")
+                    hnsw_index_manager.save()
+                    print(f"✓ HNSW index built with {count} test_images visitors (fast ANN search enabled)")
 
 # --- PYDANTIC SCHEMAS ---
 class DetectionRequest(BaseModel):
@@ -487,15 +487,15 @@ async def recognize_visitor_api(
     best_match = None
     best_score = 0.0
 
-    # Use FAISS ANN search if available, otherwise fall back to linear search
-    if faiss_index_manager and faiss_index_manager.index and faiss_index_manager.index.ntotal > 0:
-        # Fast ANN search using FAISS
+    # Use HNSW ANN search if available, otherwise fall back to linear search
+    if hnsw_index_manager and hnsw_index_manager.index and hnsw_index_manager.ntotal > 0:
+        # Fast ANN search using HNSW
         try:
-            # Search for top 50 candidates using FAISS
-            ann_results = faiss_index_manager.search(query_feature, k=50)
+            # Search for top 50 candidates using HNSW
+            ann_results = hnsw_index_manager.search(query_feature, k=50)
             
             for visitor_id, cosine_similarity, metadata in ann_results:
-                # cosine_similarity from FAISS is already in range [-1, 1]
+                # cosine_similarity from HNSW is already in range [-1, 1]
                 # OpenCV's compare_face_features returns values in similar range
                 # Use cosine_similarity directly as match_score
                 score_float = float(cosine_similarity)
@@ -517,7 +517,7 @@ async def recognize_visitor_api(
                         "is_match": True
                     }
         except Exception as e:
-            print(f"FAISS search error: {e}, falling back to linear search")
+            print(f"HNSW search error: {e}, falling back to linear search")
             # Fall through to linear search
     
     # Fallback: Linear search (original implementation)
