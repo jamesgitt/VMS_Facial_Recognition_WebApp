@@ -454,55 +454,6 @@ async def compare_faces_api_v1(request: CompareRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
 
-@app.post("/compare", response_model=RecognitionResponse, tags=["Recognition"])
-async def compare_faces_api(
-    image1: UploadFile = File(None),
-    image2: UploadFile = File(None),
-    image1_base64: str = Form(None),
-    image2_base64: str = Form(None),
-    threshold: float = Form(DEFAULT_COMPARE_THRESHOLD),
-):
-    if (image1 is None and not image1_base64) or (image2 is None and not image2_base64):
-        raise HTTPException(status_code=400, detail="Both images must be provided (file or base64).")
-    if image1 is not None:
-        img1 = uploadfile_to_np(image1)
-    else:
-        img1 = decode_base64_image(image1_base64)
-    if image2 is not None:
-        img2 = uploadfile_to_np(image2)
-    else:
-        img2 = decode_base64_image(image2_base64)
-
-    validate_image_size((img1.shape[1], img1.shape[0]))
-    validate_image_size((img2.shape[1], img2.shape[0]))
-
-    # Detect faces in both images
-    faces1 = inference.detect_faces(img1, return_landmarks=True)
-    faces2 = inference.detect_faces(img2, return_landmarks=True)
-    
-    if faces1 is None or len(faces1) == 0:
-        raise HTTPException(status_code=400, detail="No face detected in image1")
-    if faces2 is None or len(faces2) == 0:
-        raise HTTPException(status_code=400, detail="No face detected in image2")
-    
-    # Extract features
-    feature1 = inference.extract_face_features(img1, faces1[0])
-    feature2 = inference.extract_face_features(img2, faces2[0])
-    
-    if feature1 is None or feature2 is None:
-        raise HTTPException(status_code=400, detail="Failed to extract features")
-    
-    # Compare
-    score, is_match = inference.compare_face_features(feature1, feature2, threshold=threshold)
-    
-    return RecognitionResponse(
-        similarity_score=float(score),
-        is_match=bool(is_match),
-        features1=None,
-        features2=None,
-    )
-
-
 @app.post("/api/v1/recognize", response_model=VisitorRecognitionResponse, tags=["Recognition"])
 async def recognize_visitor_api(
     image: UploadFile = File(None),
