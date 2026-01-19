@@ -221,12 +221,14 @@ class HNSWIndexManager:
             self.next_index += 1
         
         if not features_list:
+            print("⚠ No valid features to add to HNSW index")
             return 0
         
         try:
             # Batch add to index
             features_array = np.vstack(features_list)
             indices_array = np.array(indices_list)
+            print(f"Adding {len(features_list)} features to HNSW index...")
             self.index.add_items(features_array, indices_array)
             
             # Store metadata
@@ -235,9 +237,12 @@ class HNSWIndexManager:
                 del meta['index']
                 self.metadata[idx] = meta
             
+            print(f"✓ Successfully added {len(features_list)} visitors to HNSW index")
             return len(features_list)
         except Exception as e:
-            print(f"Error batch adding visitors to HNSW index: {e}")
+            print(f"⚠ Error batch adding visitors to HNSW index: {e}")
+            import traceback
+            traceback.print_exc()
             return 0
     
     def search(self, query_feature: np.ndarray, k: int = 10) -> List[Tuple[str, float, Dict]]:
@@ -330,16 +335,28 @@ class HNSWIndexManager:
         
         visitors = get_visitors_func()
         batch_data = []
+        features_extracted = 0
+        features_failed = 0
         
+        print(f"Processing {len(visitors)} visitors for HNSW index...")
         for visitor_data in visitors:
             try:
                 feature = extract_feature_func(visitor_data)
                 if feature is not None:
                     visitor_id = str(visitor_data.get('id', visitor_data.get('visitor_id', 'unknown')))
                     batch_data.append((visitor_id, feature, visitor_data))
+                    features_extracted += 1
+                else:
+                    features_failed += 1
             except Exception as e:
                 print(f"Error extracting feature for visitor: {e}")
+                features_failed += 1
                 continue
+        
+        print(f"Extracted features: {features_extracted} successful, {features_failed} failed")
+        if len(batch_data) == 0:
+            print("⚠ No features extracted from visitors. Cannot build HNSW index.")
+            return 0
         
         count = self.add_visitors_batch(batch_data)
         
