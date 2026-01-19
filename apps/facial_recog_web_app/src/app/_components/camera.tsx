@@ -57,6 +57,11 @@ export function FaceRecognitionCamera() {
   const [recognitionResult, setRecognitionResult] = useState<RecognitionResponse | null>(null);
   const [recognitionThreshold, setRecognitionThreshold] = useState(0.363);
   
+  // Recognition trigger and countdown state
+  const [recognitionTriggered, setRecognitionTriggered] = useState(false);
+  const [recognitionStartTime, setRecognitionStartTime] = useState<number | null>(null);
+  const RECOGNITION_DELAY = 5000; // 5 seconds in milliseconds
+  
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(Date.now());
   const animationFrameRef = useRef<number | undefined>(undefined);
@@ -286,6 +291,8 @@ export function FaceRecognitionCamera() {
     setMode(newMode);
     setComparisonResult(null);
     setRecognitionResult(null);
+    setRecognitionTriggered(false);
+    setRecognitionStartTime(null);
     if (newMode !== "compare") {
       setEnableComparison(false);
     }
@@ -294,9 +301,29 @@ export function FaceRecognitionCamera() {
     } else if (newMode === "compare") {
       setStatus("Face comparison mode - Capture a reference face to start");
     } else if (newMode === "recognize") {
-      setStatus("Database recognition mode active");
+      setStatus("Database recognition mode - Press 'Start Recognition' button to begin");
     }
   }, []);
+
+  // Start recognition process
+  const startRecognition = useCallback(() => {
+    if (mode === "recognize" && isRunning) {
+      setRecognitionTriggered(true);
+      setRecognitionStartTime(Date.now());
+      setRecognitionResult(null);
+      setStatus("Detecting face... (5 seconds)");
+    }
+  }, [mode, isRunning]);
+
+  // Cancel recognition process
+  const cancelRecognition = useCallback(() => {
+    setRecognitionTriggered(false);
+    setRecognitionStartTime(null);
+    setRecognitionResult(null);
+    if (mode === "recognize") {
+      setStatus("Recognition cancelled. Press 'Start Recognition' to try again.");
+    }
+  }, [mode]);
 
   // Draw bounding boxes
   const drawResults = useCallback((faces: number[][]) => {
@@ -390,11 +417,34 @@ export function FaceRecognitionCamera() {
               if (comparison) {
                 setComparisonResult(comparison);
               }
-            } else if (mode === "recognize") {
-              // Recognize mode: recognize face from database
-              const recognition = await recognizeFace(imageBase64);
-              if (recognition) {
-                setRecognitionResult(recognition);
+            } else if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
+              // Recognize mode: check if 5 seconds have passed for face detection
+              const currentTime = Date.now();
+              const elapsedTime = currentTime - recognitionStartTime;
+              const remainingTime = RECOGNITION_DELAY - elapsedTime;
+              
+              if (remainingTime > 0) {
+                // Still in detection phase - show countdown
+                const secondsRemaining = Math.ceil(remainingTime / 1000);
+                setStatus(`Detecting face... (${secondsRemaining} second${secondsRemaining !== 1 ? 's' : ''} remaining)`);
+              } else {
+                // 5 seconds have passed - perform recognition
+                setStatus("Recognizing face from database...");
+                const recognition = await recognizeFace(imageBase64);
+                if (recognition) {
+                  setRecognitionResult(recognition);
+                  setRecognitionTriggered(false);
+                  setRecognitionStartTime(null);
+                  if (recognition.matched) {
+                    setStatus(`Recognized: ${recognition.visitor_id ?? recognition.visitor ?? 'Unknown'} (${((recognition.confidence ?? 0) * 100).toFixed(1)}%)`);
+                  } else {
+                    setStatus("Face not recognized in database. Press 'Start Recognition' to try again.");
+                  }
+                } else {
+                  setRecognitionTriggered(false);
+                  setRecognitionStartTime(null);
+                  setStatus("Recognition failed. Press 'Start Recognition' to try again.");
+                }
               }
             }
             
@@ -406,8 +456,28 @@ export function FaceRecognitionCamera() {
           } else {
             // No faces detected, clear results
             setComparisonResult(null);
-            setRecognitionResult(null);
+            if (mode !== "recognize" || !recognitionTriggered) {
+              setRecognitionResult(null);
+            }
             drawResults([]);
+            // If recognition is triggered but no face detected, show message
+            if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
+              const currentTime = Date.now();
+              const elapsedTime = currentTime - recognitionStartTime;
+              if (elapsedTime < RECOGNITION_DELAY) {
+                const secondsRemaining = Math.ceil((RECOGNITION_DELAY - elapsedTime) / 1000);
+                setStatus(`No face detected. Keep your face in view... (${secondsRemaining}s remaining)`);
+              }
+            }
+            // If recognition is triggered but no face detected, show message
+            if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
+              const currentTime = Date.now();
+              const elapsedTime = currentTime - recognitionStartTime;
+              if (elapsedTime < RECOGNITION_DELAY) {
+                const secondsRemaining = Math.ceil((RECOGNITION_DELAY - elapsedTime) / 1000);
+                setStatus(`No face detected. Keep your face in view... (${secondsRemaining}s remaining)`);
+              }
+            }
           }
         }
       }
@@ -437,7 +507,7 @@ export function FaceRecognitionCamera() {
     } else {
       animationFrameRef.current = undefined;
     }
-    }, [isRunning, processInterval, frameToBase64, detectFaces, drawResults, compareFaces, enableComparison, referenceFace, mode, recognizeFace]);
+    }, [isRunning, processInterval, frameToBase64, detectFaces, drawResults, compareFaces, enableComparison, referenceFace, mode, recognizeFace, recognitionTriggered, recognitionStartTime, RECOGNITION_DELAY]);
 
   // Start processing when camera is running
   useEffect(() => {
@@ -688,6 +758,27 @@ export function FaceRecognitionCamera() {
           {mode === "recognize" && (
             <div className="mb-4 rounded-lg border-2 border-green-300 bg-green-50 p-4">
               <h4 className="mb-2 font-semibold text-green-800">Database Recognition Active</h4>
+              
+              {/* Start Recognition Button */}
+              <div className="mb-4 flex gap-2">
+                {!recognitionTriggered ? (
+                  <button
+                    onClick={startRecognition}
+                    disabled={!isRunning}
+                    className="flex-1 rounded-lg bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    🎯 Start Recognition
+                  </button>
+                ) : (
+                  <button
+                    onClick={cancelRecognition}
+                    className="flex-1 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700"
+                  >
+                    ❌ Cancel Recognition
+                  </button>
+                )}
+              </div>
+              
               <div className="mb-2">
                 <label className="mb-2 block text-gray-700">
                   Recognition Threshold:{" "}
