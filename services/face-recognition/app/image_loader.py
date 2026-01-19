@@ -397,7 +397,7 @@ def clear_capture_point(ref_id: str) -> bool:
 def list_capture_points() -> List[str]:
     return list(_image_cache.keys())
     
-# 6. CACHING SYSTEM
+# 6. CACHING SYSTEM (OPTIONAL)
 #    [ ] ImageCache class
 #        - In-memory LRU cache for frequently accessed images
 #        - Configurable cache size (max items, max memory)
@@ -409,7 +409,7 @@ def list_capture_points() -> List[str]:
 #    
 #    [ ] get_cached_image(key: str) -> Optional[np.ndarray]
 #        - Retrieve from cache if available
-#
+
 # 7. DATABASE INTEGRATION
 #    [ ] load_from_database(visitor_id: str, table_name: str, 
 #                          image_column: str = 'base64Image') -> np.ndarray
@@ -418,16 +418,57 @@ def list_capture_points() -> List[str]:
 #        - Convert to OpenCV BGR format
 #        - Cache result for future use
 #        - Handle database errors gracefully
-#
+def load_from_database(visitor_id: str, table_name: str = "visitor", 
+                      image_column: str = "base64Image") -> np.ndarray:
+    """
+    Load image from database by visitor_id.
+    Query database for visitor image, decode base64, convert to OpenCV BGR format.
+    """
+    if not DB_AVAILABLE:
+        raise ValueError("Database module not available. Cannot load from database.")
+    try:
+        # Get visitor image from database
+        visitors = database.get_visitor_images_from_db(
+            table_name=table_name,
+            visitor_id_column="id",
+            image_column=image_column,
+            limit=1
+        )
+        
+        # Find matching visitor
+        for visitor_data in visitors:
+            if str(visitor_data.get("id")) == str(visitor_id):
+                base64_image = visitor_data.get(image_column)
+                if base64_image:
+                    # Decode base64 image
+                    return load_from_base64(base64_image)
+        
+        raise ValueError(f"Visitor {visitor_id} not found in database or has no image.")
+    except Exception as e:
+        raise ValueError(f"Error loading image from database: {str(e)}")
+
 # 8. ERROR HANDLING
 #    [ ] ImageLoadError(Exception)
 #        - Custom exception for image loading errors
 #        - Include error type, source, and message
-#    
+class ImageLoadError(Exception):
+    """Custom exception for image loading errors."""
+    def __init__(self, error_type: str, source: str, message: str):
+        self.error_type = error_type
+        self.source = source
+        self.message = message
+        super().__init__(f"Image loading error: {error_type} from {source}: {message}")
+        
 #    [ ] ImageValidationError(Exception)
 #        - Custom exception for validation failures
 #        - Include validation rule and actual value
-#
+class ImageValidationError(Exception):
+    """Custom exception for validation failures."""
+    def __init__(self, validation_rule: str, actual_value: str):
+        self.validation_rule = validation_rule
+        self.actual_value = actual_value
+        super().__init__(f"Validation failed: {validation_rule} - actual: {actual_value}")
+        
 # 9. CONFIGURATION
 #    [ ] Load configuration from environment variables
 #        - MAX_IMAGE_SIZE (default: 1920x1920)
@@ -436,54 +477,14 @@ def list_capture_points() -> List[str]:
 #        - CACHE_TTL (default: 3600 seconds)
 #        - ENABLE_URL_LOADING (default: False for security)
 #        - MAX_URL_SIZE (default: 10MB)
-#
-# 10. TYPE HINTS AND DOCUMENTATION
-#     [ ] Add comprehensive type hints for all functions
-#     [ ] Add docstrings with examples for each function
-#     [ ] Document error conditions and exceptions
-#     [ ] Add usage examples in module docstring
-#
-# 11. TESTING CONSIDERATIONS
-#     [ ] Unit tests for each loading method
-#     [ ] Test error handling paths
-#     [ ] Test caching behavior
-#     [ ] Test reference capture point system
-#     [ ] Test database integration
-#     [ ] Test URL loading (with mock server)
-#
-# 12. MIGRATION FROM CURRENT CODE
-#     [ ] Replace decode_base64_image() calls with load_image()
-#     [ ] Replace uploadfile_to_np() calls with load_image()
-#     [ ] Update all endpoints to use unified loader
-#     [ ] Remove duplicate image loading code from face_recog_api.py
-#     [ ] Update WebSocket handler to use new loader
-#
-# 13. PERFORMANCE OPTIMIZATIONS
-#     [ ] Add image preprocessing caching
-#     [ ] Optimize base64 decoding
-#     [ ] Add async support for URL loading
-#     [ ] Implement lazy loading for large images
-#     [ ] Add image compression for storage
-#
-# 14. SECURITY ENHANCEMENTS
-#     [ ] Validate file extensions and MIME types
-#     [ ] Scan for malicious image content
-#     [ ] Limit URL loading to whitelisted domains (if enabled)
-#     [ ] Sanitize file paths to prevent directory traversal
-#     [ ] Rate limiting for image loading operations
-#
-# ===================================
-# IMPLEMENTATION PRIORITY:
-# 1. Core loading functions (load_from_upload, load_from_base64)
-# 2. Unified loader function (load_image)
-# 3. Image validation functions
-# 4. Reference capture point system
-# 5. Caching system
-# 6. Database integration
-# 7. Error handling and configuration
-# 8. Migration from existing code
-# 9. Performance and security enhancements
-#
-# ===================================
-
+def load_configuration() -> dict:
+    """Load configuration from environment variables."""
+    return {
+        "MAX_IMAGE_SIZE": (1920, 1920),
+        "ALLOWED_FORMATS": ALLOWED_FORMATS,
+        "CACHE_SIZE": 100,
+        "CACHE_TTL": 3600,
+        "ENABLE_URL_LOADING": False,
+        "MAX_URL_SIZE": 10 * 1024 * 1024  # 10MB
+    }
 
