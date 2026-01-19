@@ -264,42 +264,139 @@ def validate_image_format(img: Image.Image) -> bool:
 #    [ ] validate_image_size(size: Tuple[int, int], max_size: Tuple[int, int]) -> bool
 #        - Check dimensions against MAX_IMAGE_SIZE
 #        - Raise ValueError if too large
-#    
+def validate_image_size(size: Tuple[int, int], max_size: Tuple[int, int]) -> bool:
+    w, h = size
+    max_w, max_h = max_size
+    if w > max_w or h > max_h:
+        raise ValueError(f"Image dimensions too large: {w}x{h}, max is {max_size}")
+    return True
+
 #    [ ] validate_image_data(img_array: np.ndarray) -> bool
 #        - Check if array is valid (not empty, correct shape, valid dtype)
 #        - Validate color channels (BGR format expected)
-#
+def validate_image_data(img_array: np.ndarray) -> bool:
+    if img_array.size == 0:
+        raise ValueError("Image array is empty")
+    if img_array.ndim != 3:
+        raise ValueError("Image array must have 3 dimensions (H, W, C)")
+    if img_array.shape[2] != 3:
+        raise ValueError("Image array must have 3 color channels (BGR)")
+    return True
+
 # 4. IMAGE PROCESSING UTILITIES
 #    [ ] normalize_image(img_array: np.ndarray) -> np.ndarray
 #        - Ensure RGB->BGR conversion
 #        - Handle grayscale conversion if needed
 #        - Normalize pixel values if required
-#    
+def normalize_image(img_array: np.ndarray) -> np.ndarray:
+    return cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+
 #    [ ] resize_if_needed(img_array: np.ndarray, max_size: Tuple[int, int]) -> np.ndarray
 #        - Resize image if exceeds max dimensions
 #        - Maintain aspect ratio
 #        - Use high-quality interpolation
-#
+def resize_if_needed(img_array: np.ndarray, max_size: Tuple[int, int]) -> np.ndarray:
+    w, h = img_array.shape[:2]
+    max_w, max_h = max_size
+    if w > max_w or h > max_h:
+        scale = min(max_w / w, max_h / h)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        return cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return img_array
+
+# Helper functions for saving images
+def save_image_to_file(file_path: str, image_data: Union[np.ndarray, str, bytes]) -> None:
+    """Save image data to a file."""
+    try:
+        # Convert image_data to numpy array if needed
+        if isinstance(image_data, str):
+            # Assume base64 string
+            img_array = load_from_base64(image_data)
+        elif isinstance(image_data, bytes):
+            # Decode bytes to image
+            img = Image.open(io.BytesIO(image_data))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img_np = np.array(img)
+            img_array = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        elif isinstance(image_data, np.ndarray):
+            img_array = image_data
+        else:
+            raise ValueError(f"Unsupported image_data type: {type(image_data)}")
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path) if os.path.dirname(file_path) else ".", exist_ok=True)
+        
+        # Save image
+        cv2.imwrite(file_path, img_array)
+    except Exception as e:
+        raise ValueError(f"Error saving image to file: {str(e)}")
+
+def save_image_to_database(visitor_id: str, image_data: Union[np.ndarray, str, bytes]) -> None:
+    """Save image data to database (not implemented - requires database update functions)."""
+    if not DB_AVAILABLE:
+        raise ValueError("Database module not available. Cannot save to database.")
+    # This would require database update functions - not implemented yet
+    raise NotImplementedError("Saving images to database is not yet implemented")
+
 # 5. REFERENCE CAPTURE POINT SYSTEM
 #    [ ] register_capture_point(ref_id: str, image_data: Union[np.ndarray, str, bytes], 
 #                               ref_type: str = 'cache') -> bool
 #        - Register an image with a reference ID for reuse
 #        - Support storage types: 'cache' (memory), 'file' (filesystem), 'database'
 #        - Return success status
-#    
+def register_capture_point(ref_id: str, image_data: Union[np.ndarray, str, bytes], 
+                           ref_type: str = 'cache') -> bool:
+    # Convert image_data to numpy array if needed (for cache)
+    if ref_type == 'cache':
+        if isinstance(image_data, str):
+            img_array = load_from_base64(image_data)
+        elif isinstance(image_data, bytes):
+            img = Image.open(io.BytesIO(image_data))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img_np = np.array(img)
+            img_array = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        elif isinstance(image_data, np.ndarray):
+            img_array = image_data
+        else:
+            raise ValueError(f"Unsupported image_data type: {type(image_data)}")
+        cache_image(ref_id, img_array)
+        return True
+    elif ref_type == 'file':
+        save_image_to_file(ref_id, image_data)
+        return True
+    elif ref_type == 'database':
+        save_image_to_database(ref_id, image_data)
+        return True
+    else:
+        raise ValueError(f"Invalid reference type: {ref_type}")
+
 #    [ ] get_capture_point(ref_id: str) -> Optional[np.ndarray]
 #        - Retrieve image by reference ID
 #        - Check cache first, then filesystem, then database
 #        - Return None if not found
-#    
+def get_capture_point(ref_id: str) -> Optional[np.ndarray]:
+    if ref_id in _image_cache:
+        return _image_cache[ref_id]
+    return None
+    
 #    [ ] clear_capture_point(ref_id: str) -> bool
 #        - Remove reference from cache/filesystem
 #        - Return success status
-#    
+def clear_capture_point(ref_id: str) -> bool:
+    if ref_id in _image_cache:
+        del _image_cache[ref_id]
+        return True
+    return False
+    
 #    [ ] list_capture_points() -> List[str]
 #        - Return list of all registered reference IDs
 #        - Useful for debugging and management
-#
+def list_capture_points() -> List[str]:
+    return list(_image_cache.keys())
+    
 # 6. CACHING SYSTEM
 #    [ ] ImageCache class
 #        - In-memory LRU cache for frequently accessed images
