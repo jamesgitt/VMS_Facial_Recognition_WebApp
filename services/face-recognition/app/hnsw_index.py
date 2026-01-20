@@ -4,7 +4,6 @@ Uses HNSW (Hierarchical Navigable Small World) approximate nearest neighbor sear
 for efficient face feature matching using cosine similarity.
 """
 
-import os
 import pickle
 import numpy as np
 from typing import List, Dict, Tuple, Optional, TYPE_CHECKING, Any
@@ -24,7 +23,7 @@ except ImportError:
 # Configuration
 INDEX_FILE = "hnsw_visitor_index.bin"
 METADATA_FILE = "hnsw_visitor_metadata.pkl"
-DEFAULT_DIMENSION = 512  # Sface feature dimension
+DEFAULT_DIMENSION = 128  # Sface feature dimension (default is 128-dim)
 DEFAULT_M = 32  # HNSW parameter: number of bi-directional links
 DEFAULT_EF_CONSTRUCTION = 200  # HNSW parameter: size of dynamic candidate list
 DEFAULT_EF_SEARCH = 50  # HNSW parameter: number of nearest neighbors to explore
@@ -45,7 +44,7 @@ class HNSWIndexManager:
         Initialize HNSW index manager.
         
         Args:
-            dimension: Feature vector dimension (default: 512 for Sface)
+            dimension: Feature vector dimension (default: 128 for Sface)
             m: HNSW parameter - number of bi-directional links (default: 32)
             ef_construction: HNSW parameter - size of dynamic candidate list during construction (default: 200)
             ef_search: HNSW parameter - number of nearest neighbors to explore during search (default: 50)
@@ -146,7 +145,7 @@ class HNSWIndexManager:
         
         Args:
             visitor_id: Unique visitor identifier
-            feature: Face feature vector (512-dim numpy array)
+            feature: Face feature vector (128-dim numpy array)
             metadata: Optional metadata (e.g., name, image_path)
         
         Returns:
@@ -203,8 +202,10 @@ class HNSWIndexManager:
             if feature is None:
                 continue
             
-            # Ensure feature is 1D array with correct dimension
+            # Ensure feature is 1D array
             feature = np.asarray(feature).flatten()
+            
+            # Validate feature dimension matches expected dimension
             if feature.shape[0] != self.dimension:
                 print(f"⚠ Skipping visitor {visitor_id}: feature dimension {feature.shape[0]} != {self.dimension}")
                 continue
@@ -261,7 +262,7 @@ class HNSWIndexManager:
         Search for nearest neighbors using HNSW ANN.
         
         Args:
-            query_feature: Query face feature vector (512-dim numpy array)
+            query_feature: Query face feature vector (128-dim numpy array)
             k: Number of nearest neighbors to return
         
         Returns:
@@ -357,23 +358,61 @@ class HNSWIndexManager:
         features_failed = 0
         
         print(f"Processing {len(visitors)} visitors for HNSW index...")
-        for visitor_data in visitors:
+        # Track failure reasons for debugging
+        failure_reasons = {}
+        sample_errors = []  # Store first few errors for debugging
+        
+        for i, visitor_data in enumerate(visitors):
             try:
                 feature = extract_feature_func(visitor_data)
                 if feature is not None:
                     visitor_id = str(visitor_data.get('id', visitor_data.get('visitor_id', 'unknown')))
+                    # Validate feature dimension
+                    feature = np.asarray(feature).flatten()
+                    if feature.shape[0] != self.dimension:
+                        reason = f"Wrong dimension: {feature.shape[0]} (expected {self.dimension})"
+                        failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+                        if len(sample_errors) < 3:
+                            sample_errors.append(f"Visitor {visitor_id}: {reason}")
+                        features_failed += 1
+                        continue
                     batch_data.append((visitor_id, feature, visitor_data))
                     features_extracted += 1
+                    if features_extracted <= 5:  # Log first few successes
+                        print(f"  ✓ Extracted {self.dimension}-dim feature for visitor {visitor_id}")
                 else:
                     features_failed += 1
+                    if features_failed <= 5:  # Log first few failures
+                        visitor_id = str(visitor_data.get('id', visitor_data.get('visitor_id', 'unknown')))
+                        print(f"  ✗ Failed to extract feature for visitor {visitor_id} (returned None)")
             except Exception as e:
-                print(f"Error extracting feature for visitor: {e}")
+                error_msg = str(e)
+                failure_reasons[error_msg] = failure_reasons.get(error_msg, 0) + 1
+                if len(sample_errors) < 3:
+                    visitor_id = str(visitor_data.get('id', visitor_data.get('visitor_id', 'unknown')))
+                    sample_errors.append(f"Visitor {visitor_id}: {error_msg}")
                 features_failed += 1
+                if features_failed <= 5:  # Log first few exceptions
+                    print(f"  ✗ Exception extracting feature: {e}")
                 continue
         
         print(f"Extracted features: {features_extracted} successful, {features_failed} failed")
+        
+        # Print failure analysis if there were failures
+        if features_failed > 0 and len(failure_reasons) > 0:
+            print(f"\nFailure analysis (top reasons):")
+            sorted_reasons = sorted(failure_reasons.items(), key=lambda x: x[1], reverse=True)[:5]
+            for reason, count in sorted_reasons:
+                print(f"  - {reason}: {count} failures")
+            if sample_errors:
+                print(f"\nSample errors:")
+                for err in sample_errors[:3]:
+                    print(f"  - {err}")
+        
         if len(batch_data) == 0:
             print("⚠ No features extracted from visitors. Cannot build HNSW index.")
+            if features_failed > 0:
+                print("   Check the failure reasons above to diagnose the issue.")
             return 0
         
         count = self.add_visitors_batch(batch_data)

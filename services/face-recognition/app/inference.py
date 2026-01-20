@@ -124,13 +124,13 @@ def detect_faces(frame, input_size=YUNET_INPUT_SIZE, score_threshold=YUNET_SCORE
 
 def extract_face_features(frame, face_row):
     """
-    Extract 512-dim Sface feature vector from a given face.
+    Extract 128-dim Sface feature vector from a given face.
 
     Args:
         frame (np.ndarray): Full BGR image.
         face_row (array-like): Face detection output row from YuNet [x, y, w, h, score, ...landmarks]
     Returns:
-        np.ndarray: Face feature vector (512-dim float32 shape).
+        np.ndarray: Face feature vector (128-dim float32 shape).
     """
     if frame is None or face_row is None:
         raise ValueError("Input frame or face_row is missing")
@@ -147,7 +147,7 @@ def compare_face_features(feature1, feature2, threshold=SFACE_SIMILARITY_THRESHO
     Compare two face features and return similarity score + match verdict.
 
     Args:
-        feature1, feature2: Output from extract_face_features (np.ndarray, 512-dim)
+        feature1, feature2: Output from extract_face_features (np.ndarray, 128-dim)
         threshold (float): Similarity threshold for "same" acceptance
 
     Returns:

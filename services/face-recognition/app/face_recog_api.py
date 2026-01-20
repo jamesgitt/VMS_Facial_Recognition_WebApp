@@ -168,21 +168,62 @@ def load_models():
     VISITOR_FEATURES.clear()
     
     def extract_feature_from_visitor_data(visitor_data):
-        """Helper function to extract feature from visitor data."""
+        """
+        Helper function to extract 128-dim feature from visitor data.
+        Handles both:
+        1. Base64-encoded 128-dim feature vectors (returns as-is)
+        2. Base64-encoded images (extracts 128-dim features using Sface)
+        """
         try:
-            base64_image = visitor_data.get(DB_IMAGE_COLUMN)
-            if not base64_image:
+            base64_data = visitor_data.get(DB_IMAGE_COLUMN)
+            if not base64_data:
                 return None
             
-            img_cv_db = image_loader.load_from_base64(base64_image)
+            visitor_id = visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')
+            
+            # Try to decode as 128-dim feature vector first (stored as base64-encoded numpy array)
+            try:
+                feature_bytes = base64.b64decode(base64_data)
+                
+                # Try to decode as numpy array (pickle format) or raw float32 bytes
+                try:
+                    # Try as pickled numpy array
+                    import pickle
+                    feature_array = pickle.loads(feature_bytes)
+                    feature_array = np.asarray(feature_array).flatten()
+                except:
+                    # Try as raw float32 bytes (128 * 4 bytes = 512 bytes for 128-dim)
+                    if len(feature_bytes) == 128 * 4:  # 128 floats * 4 bytes each
+                        feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
+                    else:
+                        raise ValueError("Not a 128-dim feature vector")
+                
+                # Check if it's a 128-dim feature vector - return as-is
+                if feature_array.shape[0] == 128:
+                    return feature_array.astype(np.float32)
+                else:
+                    # Unexpected dimension, try as image
+                    raise ValueError(f"Unexpected feature dimension: {feature_array.shape[0]}")
+            except Exception:
+                # Not a feature vector, treat as base64-encoded image
+                pass
+            
+            # Treat as base64-encoded image and extract 128-dim features using Sface
+            img_cv_db = image_loader.load_from_base64(base64_data)
             db_faces = inference.detect_faces(img_cv_db, return_landmarks=True)
             if db_faces is None or len(db_faces) == 0:
                 return None
             
+            # Extract 128-dim feature using Sface model
             db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
+            if db_feature is not None:
+                db_feature = np.asarray(db_feature).flatten().astype(np.float32)
+                if db_feature.shape[0] != 128:
+                    print(f"⚠ Warning: Extracted feature dimension is {db_feature.shape[0]}, expected 128 for visitor {visitor_id}")
+                    return None
             return db_feature
         except Exception as e:
-            print(f"Error extracting feature: {e}")
+            print(f"Error extracting feature from visitor {visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')}: {e}")
             return None
     
     if USE_DATABASE and DB_AVAILABLE:
@@ -584,17 +625,42 @@ async def recognize_visitor_api(
                         continue
                     
                     try:
-                        # Use image_loader to decode base64 image from database
-                        img_cv_db = image_loader.load_from_base64(base64_image)
+                        # Try to decode as 128-dim feature vector first
+                        db_feature = None
+                        try:
+                            feature_bytes = base64.b64decode(base64_image)
+                            try:
+                                # Try as pickled numpy array
+                                import pickle
+                                feature_array = pickle.loads(feature_bytes)
+                                feature_array = np.asarray(feature_array).flatten()
+                            except:
+                                # Try as raw float32 bytes
+                                if len(feature_bytes) == 128 * 4:  # 128-dim feature
+                                    feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
+                                else:
+                                    raise ValueError("Not a feature vector")
+                            
+                            # Check if it's a 128-dim feature vector
+                            if feature_array.shape[0] == 128:
+                                db_feature = feature_array.astype(np.float32)
+                        except Exception:
+                            # Not a feature vector, treat as image
+                            pass
                         
-                        # Detect and extract features on-the-fly
-                        db_faces = inference.detect_faces(img_cv_db, return_landmarks=True)
-                        if db_faces is None or len(db_faces) == 0:
-                            continue
-                        
-                        db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
+                        # If not a feature vector, extract from image
                         if db_feature is None:
-                            continue
+                            img_cv_db = image_loader.load_from_base64(base64_image)
+                            db_faces = inference.detect_faces(img_cv_db, return_landmarks=True)
+                            if db_faces is None or len(db_faces) == 0:
+                                continue
+                            
+                            db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
+                            if db_feature is None:
+                                continue
+                            db_feature = np.asarray(db_feature).flatten().astype(np.float32)
+                            if db_feature.shape[0] != 128:
+                                continue
                         
                         # Compare features
                         score, is_match = inference.compare_face_features(query_feature, db_feature, threshold=threshold)
@@ -741,7 +807,7 @@ async def hnsw_status():
             available=False,
             initialized=False,
             total_vectors=0,
-            dimension=512,
+            dimension=128,
             index_type="HNSW",
             visitors_indexed=0,
             details={"error": "HNSW library not available. Install with: pip install hnswlib"}
@@ -752,7 +818,7 @@ async def hnsw_status():
             available=True,
             initialized=False,
             total_vectors=0,
-            dimension=512,
+            dimension=128,
             index_type="HNSW",
             visitors_indexed=0,
             details={"error": "HNSW index manager not initialized"}
@@ -764,7 +830,7 @@ async def hnsw_status():
             available=True,
             initialized=True,
             total_vectors=stats.get('total_vectors', 0),
-            dimension=stats.get('dimension', 512),
+            dimension=stats.get('dimension', 128),
             index_type=stats.get('index_type', 'HNSW'),
             m=stats.get('m'),
             ef_construction=stats.get('ef_construction'),
@@ -777,7 +843,7 @@ async def hnsw_status():
             available=True,
             initialized=False,
             total_vectors=0,
-            dimension=512,
+            dimension=128,
             index_type="HNSW",
             visitors_indexed=0,
             details={"error": str(e)}
