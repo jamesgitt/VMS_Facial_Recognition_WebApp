@@ -1,48 +1,40 @@
+# Core Libraries
 numpy>=1.26.0
+
+# Data Science (required for notebook explorations only, not prod API)
 pandas>=2.0.0
 matplotlib>=3.7.0
 seaborn>=0.12.0
+
+# Machine Learning & Feature Extraction
 opencv-python>=4.8.0
+Pillow>=10.0.0
 kagglehub>=0.2.0
+
+# HNSW Approximate Nearest Neighbor Search
+hnswlib>=0.7.0
+
+# Deep Learning Models (optional for some workflows/processes)
 tensorflow>=2.13.0
 tf-keras>=2.20.0
 deepface>=0.0.79
 
-# --- API & Web ---
+# API & Web
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 websockets>=12.0
 
-# --- Serialization & Data Models ---
+# Serialization & Data Models
 pydantic>=2.0.0
 
-# --- Image Processing ---
-opencv-python>=4.8.0  # (duplicate removed)
-Pillow>=10.0.0
-
-# --- Database (used/optional by API) ---
+# Database Support (Postgres, for persistent backend in API)
 psycopg2-binary>=2.9.9
 
-# --- Environment Variables ---
+# Environment Variables
 python-dotenv>=1.0.0
 
-# --- REST API requirements (for face_recog_api.py) ---
-# Explicitly required by face_recog_api.py
-fastapi
-pydantic
-uvicorn[standard]
-python-multipart
-Pillow
-opencv-python
-numpy
-
-# --- ANN Search (HNSW) ---
-hnswlib>=0.7.0
-
-# --- Misc/Utility (standard library: json, os, io, base64, datetime, typing, etc.) ---
-
-# DeepFace and TensorFlow - Note: TensorFlow requires Python 3.11 or 3.12
-# For Python 3.14, TensorFlow is not available. Use Python 3.11 or 3.12 instead.
-# deepface>=0.0.79
-# tensorflow>=2.13.0
+# --- Notes ---
+# - TensorFlow requires Python 3.11 or 3.12; not compatible with Python 3.14+
+# - Avoid duplicate requirements.
+# - All standard library modules (os, io, json, base64, datetime, typing...) are native and do NOT need to be listed.
