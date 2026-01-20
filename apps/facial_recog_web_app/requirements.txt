@@ -1,0 +1,99 @@
+# ============================================================================
+# ⚠️ IMPORTANT: THIS IS A DOCUMENTATION FILE ONLY!
+# ============================================================================
+# 
+# The frontend is a Next.js/TypeScript application that uses Node.js/npm,
+# NOT Python/pip!
+# 
+# DO NOT USE: pip install -r requirements.txt
+# This will FAIL because these are npm packages, not Python packages!
+#
+# ============================================================================
+# CORRECT INSTALLATION METHOD
+# ============================================================================
+# 
+# Use npm or pnpm to install dependencies:
+# 
+#   cd apps/facial_recog_web_app
+#   npm install
+#   
+#   OR
+#   
+#   pnpm install
+#
+# ============================================================================
+# FRONTEND DEPENDENCIES (npm packages)
+# ============================================================================
+# These are listed here for documentation/reference only.
+# Install them using: npm install
+
+# Core Framework
+next>=15.2.3
+react>=19.0.0
+react-dom>=19.0.0
+
+# Authentication
+next-auth==5.0.0-beta.25
+@auth/prisma-adapter>=2.7.2
+bcryptjs>=2.4.3
+
+# Database & ORM
+@prisma/client>=6.6.0
+prisma>=6.6.0
+
+# API & Data Fetching
+@tanstack/react-query>=5.69.0
+@trpc/client>=11.0.0
+@trpc/react-query>=11.0.0
+@trpc/server>=11.0.0
+
+# Validation & Environment
+zod>=3.24.2
+@t3-oss/env-nextjs>=0.12.0
+
+# Utilities
+superjson>=2.2.1
+server-only>=0.0.1
+
+# Development Dependencies
+typescript>=5.8.2
+@types/node>=20.14.10
+@types/react>=19.0.0
+@types/react-dom>=19.0.0
+@types/bcryptjs>=2.4.6
+eslint>=9.23.0
+eslint-config-next>=15.2.3
+@eslint/eslintrc>=3.3.1
+typescript-eslint>=8.27.0
+prettier>=3.5.3
+prettier-plugin-tailwindcss>=0.6.11
+tailwindcss>=4.0.15
+@tailwindcss/postcss>=4.0.15
+postcss>=8.5.3
+
+# ============================================================================
+# SYSTEM REQUIREMENTS
+# ============================================================================
+# Node.js: >=18.x (20.x recommended)
+# npm: >=10.9.4 (or use pnpm)
+# 
+# Check versions:
+#   node --version
+#   npm --version
+#
+# ============================================================================
+# INSTALLATION STEPS
+# ============================================================================
+# 1. Navigate to frontend directory:
+#    cd apps/facial_recog_web_app
+#
+# 2. Install dependencies:
+#    npm install
+#
+# 3. Generate Prisma client:
+#    npm run db:generate
+#
+# 4. Start development server:
+#    npm run dev
+#
+# ============================================================================

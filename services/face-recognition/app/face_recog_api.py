@@ -22,7 +22,6 @@ import datetime
 from typing import List, Tuple, Optional, Any
 from pathlib import Path
 
-import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
