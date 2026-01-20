@@ -24,9 +24,9 @@ except ImportError:
 INDEX_FILE = "hnsw_visitor_index.bin"
 METADATA_FILE = "hnsw_visitor_metadata.pkl"
 DEFAULT_DIMENSION = 128  # Sface feature dimension (default is 128-dim)
-DEFAULT_M = 32  # HNSW parameter: number of bi-directional links
-DEFAULT_EF_CONSTRUCTION = 200  # HNSW parameter: size of dynamic candidate list
-DEFAULT_EF_SEARCH = 50  # HNSW parameter: number of nearest neighbors to explore
+DEFAULT_M = 8   # HNSW parameter: number of bi-directional links (lower=faster build/search)
+DEFAULT_EF_CONSTRUCTION = 40  # HNSW parameter: smaller list = much faster construction
+DEFAULT_EF_SEARCH = 10  # HNSW parameter: fewer neighbors explored=faster queries
 
 
 class HNSWIndexManager:
