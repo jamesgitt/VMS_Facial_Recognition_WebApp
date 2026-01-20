@@ -80,6 +80,7 @@ USE_DATABASE = os.environ.get("USE_DATABASE", "false").lower() == "true"
 DB_TABLE_NAME = os.environ.get("DB_TABLE_NAME", "visitors")
 DB_VISITOR_ID_COLUMN = os.environ.get("DB_VISITOR_ID_COLUMN", "id")  # Changed from visitor_id to id
 DB_IMAGE_COLUMN = os.environ.get("DB_IMAGE_COLUMN", "base64Image")
+DB_FEATURES_COLUMN = os.environ.get("DB_FEATURES_COLUMN", "facefeatures")  # Column to store extracted face features
 DB_ACTIVE_ONLY = os.environ.get("DB_ACTIVE_ONLY", "false").lower() == "true"  # Not used in minimal schema
 DB_VISITOR_LIMIT = int(os.environ.get("DB_VISITOR_LIMIT", "0")) or None  # 0 or None = no limit
 
@@ -123,8 +124,14 @@ def load_models():
     # Initialize HNSW index manager
     if HNSW_AVAILABLE and HNSWIndexManager is not None:
         try:
-            hnsw_index_manager = HNSWIndexManager(index_dir=MODELS_PATH)
-            print("✓ HNSW index manager initialized")
+            # Get index configuration from environment variables
+            index_dir = os.environ.get("HNSW_INDEX_DIR", MODELS_PATH)
+            max_elements = int(os.environ.get("HNSW_MAX_ELEMENTS", "100000"))
+            hnsw_index_manager = HNSWIndexManager(
+                index_dir=index_dir,
+                max_elements=max_elements
+            )
+            print(f"✓ HNSW index manager initialized (max_elements={max_elements}, index_dir={index_dir})")
         except Exception as e:
             print(f"⚠ Error initializing HNSW index: {e}")
             hnsw_index_manager = None
@@ -170,43 +177,33 @@ def load_models():
     def extract_feature_from_visitor_data(visitor_data):
         """
         Helper function to extract 128-dim feature from visitor data.
-        Handles both:
-        1. Base64-encoded 128-dim feature vectors (returns as-is)
-        2. Base64-encoded images (extracts 128-dim features using Sface)
+        Priority:
+        1. Use faceFeatures column if available (stored features)
+        2. Extract from base64Image and save to faceFeatures column
         """
         try:
+            visitor_id = visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')
+            
+            # First, check if faceFeatures column has stored features
+            stored_features = visitor_data.get(DB_FEATURES_COLUMN)
+            if stored_features:
+                try:
+                    # Decode base64-encoded feature vector
+                    feature_bytes = base64.b64decode(stored_features)
+                    feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
+                    
+                    if feature_array.shape[0] == 128:
+                        return feature_array.astype(np.float32)
+                    else:
+                        print(f"⚠ Warning: Stored feature dimension is {feature_array.shape[0]}, expected 128 for visitor {visitor_id}")
+                except Exception as e:
+                    print(f"⚠ Error decoding stored features for visitor {visitor_id}: {e}")
+                    # Fall through to extract from image
+            
+            # No stored features, extract from image
             base64_data = visitor_data.get(DB_IMAGE_COLUMN)
             if not base64_data:
                 return None
-            
-            visitor_id = visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')
-            
-            # Try to decode as 128-dim feature vector first (stored as base64-encoded numpy array)
-            try:
-                feature_bytes = base64.b64decode(base64_data)
-                
-                # Try to decode as numpy array (pickle format) or raw float32 bytes
-                try:
-                    # Try as pickled numpy array
-                    import pickle
-                    feature_array = pickle.loads(feature_bytes)
-                    feature_array = np.asarray(feature_array).flatten()
-                except:
-                    # Try as raw float32 bytes (128 * 4 bytes = 512 bytes for 128-dim)
-                    if len(feature_bytes) == 128 * 4:  # 128 floats * 4 bytes each
-                        feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
-                    else:
-                        raise ValueError("Not a 128-dim feature vector")
-                
-                # Check if it's a 128-dim feature vector - return as-is
-                if feature_array.shape[0] == 128:
-                    return feature_array.astype(np.float32)
-                else:
-                    # Unexpected dimension, try as image
-                    raise ValueError(f"Unexpected feature dimension: {feature_array.shape[0]}")
-            except Exception:
-                # Not a feature vector, treat as base64-encoded image
-                pass
             
             # Treat as base64-encoded image and extract 128-dim features using Sface
             img_cv_db = image_loader.load_from_base64(base64_data)
@@ -216,11 +213,27 @@ def load_models():
             
             # Extract 128-dim feature using Sface model
             db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
-            if db_feature is not None:
-                db_feature = np.asarray(db_feature).flatten().astype(np.float32)
-                if db_feature.shape[0] != 128:
-                    print(f"⚠ Warning: Extracted feature dimension is {db_feature.shape[0]}, expected 128 for visitor {visitor_id}")
-                    return None
+            if db_feature is None:
+                return None
+            
+            db_feature = np.asarray(db_feature).flatten().astype(np.float32)
+            if db_feature.shape[0] != 128:
+                print(f"⚠ Warning: Extracted feature dimension is {db_feature.shape[0]}, expected 128 for visitor {visitor_id}")
+                return None
+            
+            # Save extracted features to database faceFeatures column
+            if USE_DATABASE and DB_AVAILABLE:
+                try:
+                    database.update_visitor_features(
+                        visitor_id=str(visitor_id),
+                        features=db_feature,
+                        table_name=DB_TABLE_NAME,
+                        visitor_id_column=DB_VISITOR_ID_COLUMN,
+                        features_column=DB_FEATURES_COLUMN
+                    )
+                except Exception as e:
+                    print(f"⚠ Warning: Failed to save features to database for visitor {visitor_id}: {e}")
+            
             return db_feature
         except Exception as e:
             print(f"Error extracting feature from visitor {visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')}: {e}")
@@ -234,6 +247,7 @@ def load_models():
                 table_name=DB_TABLE_NAME,
                 visitor_id_column=DB_VISITOR_ID_COLUMN,
                 image_column=DB_IMAGE_COLUMN,
+                features_column=DB_FEATURES_COLUMN,
                 limit=DB_VISITOR_LIMIT,
                 active_only=DB_ACTIVE_ONLY
             )

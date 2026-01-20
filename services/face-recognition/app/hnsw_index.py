@@ -4,6 +4,7 @@ Uses HNSW (Hierarchical Navigable Small World) approximate nearest neighbor sear
 for efficient face feature matching using cosine similarity.
 """
 
+import os
 import pickle
 import numpy as np
 from typing import List, Dict, Tuple, Optional, TYPE_CHECKING, Any
@@ -21,12 +22,13 @@ except ImportError:
     print("Warning: HNSW not available. Install with: pip install hnswlib")
 
 # Configuration
-INDEX_FILE = "hnsw_visitor_index.bin"
-METADATA_FILE = "hnsw_visitor_metadata.pkl"
+INDEX_FILE = os.environ.get("HNSW_INDEX_FILE", "hnsw_visitor_index.bin")
+METADATA_FILE = os.environ.get("HNSW_METADATA_FILE", "hnsw_visitor_metadata.pkl")
 DEFAULT_DIMENSION = 128  # Sface feature dimension (default is 128-dim)
 DEFAULT_M = 8   # HNSW parameter: number of bi-directional links (lower=faster build/search)
 DEFAULT_EF_CONSTRUCTION = 40  # HNSW parameter: smaller list = much faster construction
 DEFAULT_EF_SEARCH = 10  # HNSW parameter: fewer neighbors explored=faster queries
+DEFAULT_MAX_ELEMENTS = int(os.environ.get("HNSW_MAX_ELEMENTS", "100000"))  # Max vectors in index (default: 100k)
 
 
 class HNSWIndexManager:
@@ -39,16 +41,18 @@ class HNSWIndexManager:
                  m: int = DEFAULT_M,
                  ef_construction: int = DEFAULT_EF_CONSTRUCTION,
                  ef_search: int = DEFAULT_EF_SEARCH,
-                 index_dir: str = "models"):
+                 index_dir: str = "models",
+                 max_elements: int = DEFAULT_MAX_ELEMENTS):
         """
         Initialize HNSW index manager.
         
         Args:
             dimension: Feature vector dimension (default: 128 for Sface)
-            m: HNSW parameter - number of bi-directional links (default: 32)
-            ef_construction: HNSW parameter - size of dynamic candidate list during construction (default: 200)
-            ef_search: HNSW parameter - number of nearest neighbors to explore during search (default: 50)
+            m: HNSW parameter - number of bi-directional links (default: 8)
+            ef_construction: HNSW parameter - size of dynamic candidate list during construction (default: 40)
+            ef_search: HNSW parameter - number of nearest neighbors to explore during search (default: 10)
             index_dir: Directory to store index files
+            max_elements: Maximum number of vectors in index (default: 100000, set via HNSW_MAX_ELEMENTS env var)
         """
         if not HNSW_AVAILABLE:
             raise ImportError("HNSW is not available. Install with: pip install hnswlib")
@@ -57,6 +61,7 @@ class HNSWIndexManager:
         self.m = m
         self.ef_construction = ef_construction
         self.ef_search = ef_search
+        self.max_elements = max_elements
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
         
@@ -76,7 +81,7 @@ class HNSWIndexManager:
         # Create HNSW index with cosine similarity (inner product for normalized vectors)
         # hnswlib uses 'cosine' space for cosine similarity
         index = hnswlib.Index(space='cosine', dim=self.dimension)
-        index.init_index(max_elements=10000, ef_construction=self.ef_construction, M=self.m)
+        index.init_index(max_elements=self.max_elements, ef_construction=self.ef_construction, M=self.m)
         index.set_ef(self.ef_search)
         return index
     

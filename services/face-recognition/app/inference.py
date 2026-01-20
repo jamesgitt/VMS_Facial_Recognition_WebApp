@@ -38,7 +38,7 @@ YUNET_INPUT_SIZE = (320, 320)
 YUNET_SCORE_THRESHOLD = 0.6
 YUNET_NMS_THRESHOLD = 0.3
 YUNET_TOP_K = 5000
-SFACE_SIMILARITY_THRESHOLD = 0.363  # Empirical threshold for same/not-same under Cosine
+SFACE_SIMILARITY_THRESHOLD = 0.55 # Empirical threshold for same/not-same under Cosine
 
 # ---------------- ERROR HANDLING AND MODEL LOADING ----------------
 

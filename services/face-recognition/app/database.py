@@ -11,6 +11,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
 import logging
+import numpy as np
 
 # Load environment variables from .env file if it exists
 try:
@@ -95,22 +96,24 @@ def get_visitor_images_from_db(
     table_name: str = "visitors",
     visitor_id_column: str = "id",
     image_column: str = "base64Image",
+    features_column: Optional[str] = None,
     limit: Optional[int] = None,
     active_only: bool = False
 ) -> List[Dict]:
     """
-    Query visitor images from the database.
+    Query visitor images and features from the database.
     
     Args:
         table_name: Name of the visitors table (default: "visitors")
         visitor_id_column: Column name for visitor ID (default: "visitor_id")
         image_column: Column name for base64 image (default: "base64Image")
+        features_column: Column name for face features (default: None, will not fetch if not provided)
         limit: Maximum number of visitors to retrieve (None = all)
         active_only: If True, only get active visitors (requires 'active' or 'status' column)
     
     Returns:
-        List of dictionaries with visitor_id and base64Image
-        Example: [{"visitor_id": "123", "base64Image": "base64_string", ...}, ...]
+        List of dictionaries with visitor_id, base64Image, and optionally faceFeatures
+        Example: [{"id": "123", "base64Image": "base64_string", "faceFeatures": "base64_feature", ...}, ...]
     """
     conn = None
     try:
@@ -123,12 +126,18 @@ def get_visitor_images_from_db(
         
         # Build query - use quoted column names for case-sensitive columns
         # PostgreSQL requires quotes for mixed-case column names
-        case_sensitive_cols = ['id', 'base64Image', 'imageUrl', 'firstName', 'lastName', 'fullName', 'createdAt', 'updatedAt']
+        case_sensitive_cols = ['id', 'base64Image', 'imageUrl', 'firstName', 'lastName', 'fullName', 'createdAt', 'updatedAt', 'faceFeatures']
         visitor_id_col = f'"{visitor_id_column}"' if visitor_id_column in case_sensitive_cols else visitor_id_column
         image_col = f'"{image_column}"' if image_column in case_sensitive_cols else image_column
         
+        # Build SELECT clause
+        select_cols = [f"{visitor_id_col}", f"{image_col}"]
+        if features_column:
+            features_col = f'"{features_column}"' if features_column in case_sensitive_cols else features_column
+            select_cols.append(f"{features_col}")
+        
         query = f"""
-            SELECT {visitor_id_col}, {image_col}
+            SELECT {', '.join(select_cols)}
             FROM {table_name}
             WHERE {image_col} IS NOT NULL
         """
@@ -209,6 +218,69 @@ def get_visitor_details(
             else:
                 conn.close()
 
+
+def update_visitor_features(
+    visitor_id: str,
+    features: np.ndarray,
+    table_name: str = "visitors",
+    visitor_id_column: str = "id",
+    features_column: str = "faceFeatures"
+) -> bool:
+    """
+    Update face features for a visitor in the database.
+    
+    Args:
+        visitor_id: The visitor ID to update
+        features: 128-dim feature vector as numpy array
+        table_name: Name of the visitors table
+        visitor_id_column: Column name for visitor ID
+        features_column: Column name for face features
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    conn = None
+    try:
+        if _connection_pool:
+            conn = _connection_pool.getconn()
+        else:
+            conn = get_db_connection()
+        
+        cursor = conn.cursor()
+        
+        # Use quoted column names if case-sensitive
+        case_sensitive_cols = ['id', 'base64Image', 'imageUrl', 'firstName', 'lastName', 'fullName', 'createdAt', 'updatedAt', 'faceFeatures']
+        visitor_id_col = f'"{visitor_id_column}"' if visitor_id_column in case_sensitive_cols else visitor_id_column
+        features_col = f'"{features_column}"' if features_column in case_sensitive_cols else features_column
+        
+        # Convert numpy array to base64-encoded bytes
+        features_bytes = features.astype(np.float32).tobytes()
+        features_base64 = base64.b64encode(features_bytes).decode('utf-8')
+        
+        # Update query
+        query = f"""
+            UPDATE {table_name}
+            SET {features_col} = %s
+            WHERE {visitor_id_col} = %s
+        """
+        
+        cursor.execute(query, (features_base64, visitor_id))
+        conn.commit()
+        
+        logger.info(f"Updated face features for visitor {visitor_id}")
+        return True
+        
+    except psycopg2.Error as e:
+        logger.error(f"Database error updating features: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            if _connection_pool:
+                _connection_pool.putconn(conn)
+            else:
+                conn.close()
 
 def test_connection() -> bool:
     """
