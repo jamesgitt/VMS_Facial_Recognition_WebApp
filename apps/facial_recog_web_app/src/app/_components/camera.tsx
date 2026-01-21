@@ -934,7 +934,7 @@ export function FaceRecognitionCamera() {
                     {recognitionResult.matched && (
                       <div className="mt-1">
                         <div><strong>Visitor ID:</strong> {recognitionResult.visitor_id ?? recognitionResult.visitor ?? "Unknown"}</div>
-                        {(recognitionResult.firstName || recognitionResult.lastName) && (
+                        {((recognitionResult.firstName ?? "") || (recognitionResult.lastName ?? "")) && (
                           <div><strong>Name:</strong> {`${recognitionResult.firstName ?? ""} ${recognitionResult.lastName ?? ""}`.trim()}</div>
                         )}
                         <div><strong>Confidence:</strong> {((recognitionResult.confidence ?? 0) * 100).toFixed(2)}%</div>
