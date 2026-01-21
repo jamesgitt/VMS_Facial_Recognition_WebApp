@@ -53,7 +53,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./services/face-recognition/models:/app/app/models:ro
+      - ./services/face-recognition/app/models:/app/app/models:ro
       - ./services/face-recognition/test_images:/app/app/test_images:ro
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001,http://frontend:3000}
