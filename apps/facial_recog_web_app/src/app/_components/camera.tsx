@@ -51,7 +51,7 @@ export function FaceRecognitionCamera() {
   const [apiUrl, setApiUrl] = useState(
     env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
   );
-  const [comparisonThreshold, setComparisonThreshold] = useState(0.363);
+  const [comparisonThreshold, setComparisonThreshold] = useState(0.550);
   const [referenceFace, setReferenceFace] = useState<string | null>(null);
   const [comparisonResult, setComparisonResult] = useState<ComparisonResponse | null>(null);
   const [enableComparison, setEnableComparison] = useState(false);
@@ -59,12 +59,12 @@ export function FaceRecognitionCamera() {
   // Mode selection: 'detect' | 'compare' | 'recognize'
   const [mode, setMode] = useState<"detect" | "compare" | "recognize">("detect");
   const [recognitionResult, setRecognitionResult] = useState<RecognitionResponse | null>(null);
-  const [recognitionThreshold, setRecognitionThreshold] = useState(0.363);
+  const [recognitionThreshold, setRecognitionThreshold] = useState(0.550);
   
   // Recognition trigger and countdown state
   const [recognitionTriggered, setRecognitionTriggered] = useState(false);
   const [recognitionStartTime, setRecognitionStartTime] = useState<number | null>(null);
-  const RECOGNITION_DELAY = 5000; // 5 seconds in milliseconds
+  const RECOGNITION_DELAY = 3000; // 3 seconds in milliseconds
 
   // HNSW status check
   interface HNSWStatus {
