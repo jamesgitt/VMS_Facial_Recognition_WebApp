@@ -25,9 +25,9 @@ except ImportError:
 INDEX_FILE = os.environ.get("HNSW_INDEX_FILE", "hnsw_visitor_index.bin")
 METADATA_FILE = os.environ.get("HNSW_METADATA_FILE", "hnsw_visitor_metadata.pkl")
 DEFAULT_DIMENSION = 128  # Sface feature dimension (default is 128-dim)
-DEFAULT_M = 8   # HNSW parameter: number of bi-directional links (lower=faster build/search)
-DEFAULT_EF_CONSTRUCTION = 40  # HNSW parameter: smaller list = much faster construction
-DEFAULT_EF_SEARCH = 10  # HNSW parameter: fewer neighbors explored=faster queries
+DEFAULT_M = 16   # HNSW parameter: number of bi-directional links (higher=better recall)
+DEFAULT_EF_CONSTRUCTION = 200  # HNSW parameter: higher = better index quality
+DEFAULT_EF_SEARCH = 200  # HNSW parameter: more neighbors explored = compare to more faces
 DEFAULT_MAX_ELEMENTS = int(os.environ.get("HNSW_MAX_ELEMENTS", "100000"))  # Max vectors in index (default: 100k)
 
 
@@ -266,7 +266,7 @@ class HNSWIndexManager:
             traceback.print_exc()
             return 0
     
-    def search(self, query_feature: np.ndarray, k: int = 10) -> List[Tuple[str, float, Dict]]:
+    def search(self, query_feature: np.ndarray, k: int = 100) -> List[Tuple[str, float, Dict]]:
         """
         Search for nearest neighbors using HNSW ANN.
         
