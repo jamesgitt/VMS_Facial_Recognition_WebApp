@@ -383,7 +383,7 @@ export function FaceRecognitionCamera() {
       setRecognitionTriggered(true);
       setRecognitionStartTime(Date.now());
       setRecognitionResult(null);
-      setStatus("Detecting face... (5 seconds)");
+      setStatus("Get ready... capturing in 3 seconds");
     }
   }, [mode, isRunning]);
 
@@ -493,35 +493,47 @@ export function FaceRecognitionCamera() {
                 setComparisonResult(comparison);
               }
             } else if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
-              // Recognize mode: check if 5 seconds have passed for face detection
+              // Recognize mode: countdown with realtime detection, then capture single photo
               const currentTime = Date.now();
               const elapsedTime = currentTime - recognitionStartTime;
               const remainingTime = RECOGNITION_DELAY - elapsedTime;
               
               if (remainingTime > 0) {
-                // Still in detection phase - show countdown
+                // Still in countdown phase - show countdown (detection continues in background)
                 const secondsRemaining = Math.ceil(remainingTime / 1000);
-                setStatus(`Detecting face... (${secondsRemaining} second${secondsRemaining !== 1 ? 's' : ''} remaining)`);
+                setStatus(`Get ready... capturing in ${secondsRemaining} second${secondsRemaining !== 1 ? 's' : ''}`);
+                // Just detection during countdown - no recognition yet
               } else {
-                // 5 seconds have passed - perform recognition
-                setStatus("Recognizing face from database...");
-                const recognition = await recognizeFace(imageBase64);
-                if (recognition) {
-                  setRecognitionResult(recognition);
+                // Countdown complete - capture THIS frame for recognition
+                setStatus("Capturing photo...");
+                
+                // Capture the current frame as the recognition photo
+                const capturedPhoto = frameToBase64();
+                
+                if (capturedPhoto) {
+                  setStatus("Recognizing face from captured photo...");
+                  const recognition = await recognizeFace(capturedPhoto);
+                  
                   setRecognitionTriggered(false);
                   setRecognitionStartTime(null);
-                  if (recognition.matched) {
-                    const recognizedName = (recognition.firstName || recognition.lastName)
-                      ? `${recognition.firstName ?? ""} ${recognition.lastName ?? ""}`.trim()
-                      : (recognition.visitor_id ?? recognition.visitor ?? 'Unknown');
-                    setStatus(`Recognized: ${recognizedName} (${((recognition.confidence ?? 0) * 100).toFixed(1)}%)`);
+                  
+                  if (recognition) {
+                    setRecognitionResult(recognition);
+                    if (recognition.matched) {
+                      const recognizedName = (recognition.firstName || recognition.lastName)
+                        ? `${recognition.firstName ?? ""} ${recognition.lastName ?? ""}`.trim()
+                        : (recognition.visitor_id ?? recognition.visitor ?? 'Unknown');
+                      setStatus(`Recognized: ${recognizedName} (${((recognition.confidence ?? 0) * 100).toFixed(1)}%)`);
+                    } else {
+                      setStatus("Face not recognized. Press 'Start Recognition' to try again.");
+                    }
                   } else {
-                    setStatus("Face not recognized in database. Press 'Start Recognition' to try again.");
+                    setStatus("Recognition failed. Press 'Start Recognition' to try again.");
                   }
                 } else {
                   setRecognitionTriggered(false);
                   setRecognitionStartTime(null);
-                  setStatus("Recognition failed. Press 'Start Recognition' to try again.");
+                  setStatus("Failed to capture photo. Press 'Start Recognition' to try again.");
                 }
               }
             }
@@ -538,22 +550,15 @@ export function FaceRecognitionCamera() {
               setRecognitionResult(null);
             }
             drawResults([]);
-            // If recognition is triggered but no face detected, show message
+            setFaceCount(0);
+            
+            // If recognition countdown is active but no face detected, show warning
             if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
               const currentTime = Date.now();
               const elapsedTime = currentTime - recognitionStartTime;
               if (elapsedTime < RECOGNITION_DELAY) {
                 const secondsRemaining = Math.ceil((RECOGNITION_DELAY - elapsedTime) / 1000);
-                setStatus(`No face detected. Keep your face in view... (${secondsRemaining}s remaining)`);
-              }
-            }
-            // If recognition is triggered but no face detected, show message
-            if (mode === "recognize" && recognitionTriggered && recognitionStartTime !== null) {
-              const currentTime = Date.now();
-              const elapsedTime = currentTime - recognitionStartTime;
-              if (elapsedTime < RECOGNITION_DELAY) {
-                const secondsRemaining = Math.ceil((RECOGNITION_DELAY - elapsedTime) / 1000);
-                setStatus(`No face detected. Keep your face in view... (${secondsRemaining}s remaining)`);
+                setStatus(`No face detected! Position your face... (${secondsRemaining}s)`);
               }
             }
           }
