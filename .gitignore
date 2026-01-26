@@ -103,3 +103,6 @@ apps/facial_recog_web_app/generated/
 # Example files (safe to commit)
 !.env.example
 !docker-compose.*.example
+# SSL Certificates
+certs/
+*.pem

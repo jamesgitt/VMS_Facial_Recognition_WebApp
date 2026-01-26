@@ -2,8 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install necessary system packages for OpenCV and hnswlib
-RUN apt-get update && apt-get install -y \
+# Install system dependencies required by OpenCV, hnswlib, and SSL
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -13,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     g++ \
     make \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip and install Python dependencies
@@ -20,22 +22,25 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application source code
 COPY app/ ./app/
 
-# Ensure models directory exists (models are mounted as a volume in docker compose)
+# Ensure models directory exists (models will be mounted as a volume)
 RUN mkdir -p ./app/models
 
-# (Optional) Copy models to image if needed
+# (Uncomment if models should be copied instead of mounted)
 # COPY models/ ./app/models/
 
 WORKDIR /app/app
 
 ENV MODELS_PATH=/app/app/models
 
-EXPOSE 8000
+# Expose both HTTP (8000) and HTTPS (8443) ports
+EXPOSE 8000 8443
 
+# Healthcheck: Use HTTPS endpoint if running with SSL
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+  CMD python -c "import urllib.request, ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:8443/api/v1/health', context=ctx)" || exit 1
 
+# Default command - can be overridden by docker-compose
 CMD ["uvicorn", "face_recog_api:app", "--host", "0.0.0.0", "--port", "8000"]
