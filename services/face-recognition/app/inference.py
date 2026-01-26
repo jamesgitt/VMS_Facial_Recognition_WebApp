@@ -1,124 +1,131 @@
 """
 Face Detection and Recognition Inference Utilities
 
-Loads and configures YuNet (face detection) and Sface (recognition) ONNX models.
-Designed as a reusable utility for later integration into an API or web service layer.
-No CLI or app logic is included here.
+Loads and configures YuNet (face detection) and SFace (recognition) ONNX models.
+Designed as a reusable utility for API or web service integration.
 
 Exports:
 - detect_faces: Face detection with YuNet
-- extract_face_features: Feature extraction with Sface
-- compare_face_features: Cosine similarity and verdict between two feature vectors
-- Utility (configuration, validation, alignment, rectangle drawing)
+- extract_face_features: Feature extraction with SFace (128-dim)
+- compare_face_features: Cosine similarity comparison
+- draw_face_rectangles: Visualization utility
+- get_face_landmarks: Extract 5-point landmarks from detection
 """
+
+import os
+from typing import Optional, List, Tuple, Union
 
 import cv2
 import numpy as np
-import os
 
-# ------------------- CONFIGURATION -------------------
-
-# Get the directory where this script is located
+# Configuration
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Check for MODELS_PATH environment variable first (for Docker), then use default
-# In Docker: MODELS_PATH is set to /app/app/models
-# Locally: defaults to models/ in the face-recognition directory (parent of app/)
-# Also check if models exist in app/models (for local development)
-env_models_path = os.environ.get("MODELS_PATH")
-if env_models_path:
-    MODELS_DIR = env_models_path
-else:
-    # Try multiple possible locations
-    possible_paths = [
-        os.path.join(_SCRIPT_DIR, 'models'),  # app/models (local dev)
-        os.path.join(os.path.dirname(_SCRIPT_DIR), 'models'),  # face-recognition/models (Docker)
-        os.path.join(os.path.dirname(os.path.dirname(_SCRIPT_DIR)), 'models'),  # services/face-recognition/models
-    ]
-    MODELS_DIR = None
-    for path in possible_paths:
-        if os.path.exists(path):
-            MODELS_DIR = path
-            break
-    if MODELS_DIR is None:
-        # Default to app/models if nothing found
-        MODELS_DIR = os.path.join(_SCRIPT_DIR, 'models')
-
-DEFAULT_MODELS_DIR = MODELS_DIR
 
 YUNET_FILENAME = 'face_detection_yunet_2023mar.onnx'
 SFACE_FILENAME = 'face_recognition_sface_2021dec.onnx'
 
-YUNET_PATH = os.path.join(DEFAULT_MODELS_DIR, YUNET_FILENAME)
-SFACE_PATH = os.path.join(DEFAULT_MODELS_DIR, SFACE_FILENAME)
-
-# Default model params; can be adjusted at import time for your API needs
+# Model parameters
 YUNET_INPUT_SIZE = (320, 320)
 YUNET_SCORE_THRESHOLD = 0.6
 YUNET_NMS_THRESHOLD = 0.3
 YUNET_TOP_K = 5000
-SFACE_SIMILARITY_THRESHOLD = 0.55 # Empirical threshold for same/not-same under Cosine
+SFACE_SIMILARITY_THRESHOLD = 0.55
 
-# ---------------- ERROR HANDLING AND MODEL LOADING ----------------
 
-def _verify_model_file(path, model_name="model"):
-    """Raise error if model file missing."""
+def _find_models_dir() -> str:
+    """Find the models directory from environment or common locations."""
+    env_path = os.environ.get("MODELS_PATH")
+    if env_path:
+        return env_path
+    
+    search_paths = [
+        os.path.join(_SCRIPT_DIR, 'models'),
+        os.path.join(os.path.dirname(_SCRIPT_DIR), 'models'),
+        os.path.join(os.path.dirname(os.path.dirname(_SCRIPT_DIR)), 'models'),
+    ]
+    
+    for path in search_paths:
+        if os.path.exists(path):
+            return path
+    
+    return os.path.join(_SCRIPT_DIR, 'models')
+
+
+DEFAULT_MODELS_DIR = _find_models_dir()
+YUNET_PATH = os.path.join(DEFAULT_MODELS_DIR, YUNET_FILENAME)
+SFACE_PATH = os.path.join(DEFAULT_MODELS_DIR, SFACE_FILENAME)
+
+
+def _verify_model_file(path: str, model_name: str) -> None:
+    """Raise FileNotFoundError if model file is missing."""
     if not os.path.exists(path):
-        print(f"ERROR: {model_name} not found at {path}")
-        raise FileNotFoundError(f"{model_name} model not found. Please ensure the file exists at {path}")
+        raise FileNotFoundError(f"{model_name} model not found at {path}")
 
-# Check for required model files up front for clearer error tracing
-_verify_model_file(YUNET_PATH, "YuNet")
-_verify_model_file(SFACE_PATH, "Sface")
 
-try:
-    detector = cv2.FaceDetectorYN.create(
-        model=YUNET_PATH,
-        config='',
-        input_size=YUNET_INPUT_SIZE,
-        score_threshold=YUNET_SCORE_THRESHOLD,
-        nms_threshold=YUNET_NMS_THRESHOLD,
-        top_k=YUNET_TOP_K
-    )
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize YuNet model: {str(e)}")
+def _load_models():
+    """Load and return detector and recognizer models."""
+    _verify_model_file(YUNET_PATH, "YuNet")
+    _verify_model_file(SFACE_PATH, "SFace")
+    
+    try:
+        det = cv2.FaceDetectorYN.create(
+            model=YUNET_PATH,
+            config='',
+            input_size=YUNET_INPUT_SIZE,
+            score_threshold=YUNET_SCORE_THRESHOLD,
+            nms_threshold=YUNET_NMS_THRESHOLD,
+            top_k=YUNET_TOP_K
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize YuNet: {e}")
+    
+    try:
+        rec = cv2.FaceRecognizerSF.create(
+            model=SFACE_PATH,
+            config='',
+            backend_id=cv2.dnn.DNN_BACKEND_DEFAULT,
+            target_id=cv2.dnn.DNN_TARGET_CPU
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize SFace: {e}")
+    
+    return det, rec
 
-try:
-    recognizer = cv2.FaceRecognizerSF.create(
-        model=SFACE_PATH,
-        config='',
-        backend_id=cv2.dnn.DNN_BACKEND_DEFAULT,
-        target_id=cv2.dnn.DNN_TARGET_CPU
-    )
-except Exception as e:
-    raise RuntimeError(f"Failed to initialize Sface model: {str(e)}")
 
-# ----------- UTILITY FUNCTIONS ----------------
+# Initialize models at module load
+detector, recognizer = _load_models()
 
-def detect_faces(frame, input_size=YUNET_INPUT_SIZE, score_threshold=YUNET_SCORE_THRESHOLD,
-                 nms_threshold=YUNET_NMS_THRESHOLD, return_landmarks=False):
+
+def detect_faces(
+    frame: np.ndarray,
+    input_size: Tuple[int, int] = YUNET_INPUT_SIZE,
+    score_threshold: float = YUNET_SCORE_THRESHOLD,
+    nms_threshold: float = YUNET_NMS_THRESHOLD,
+    return_landmarks: bool = False
+) -> Optional[Union[np.ndarray, List[Tuple[int, int, int, int]]]]:
     """
     Detect faces in a BGR image using YuNet.
 
     Args:
-        frame (np.ndarray): Input BGR image.
-        input_size (tuple): Input size for detector.
-        score_threshold (float): Detection threshold.
-        nms_threshold (float): NMS suppression threshold.
-        return_landmarks (bool): If True, return landmark data also.
+        frame: Input BGR image
+        input_size: Input size for detector
+        score_threshold: Detection confidence threshold
+        nms_threshold: Non-max suppression threshold
+        return_landmarks: If True, return full face data with landmarks
 
     Returns:
-        faces: None if no faces, else np.ndarray shape [num_faces, 15] per YuNet docs.
+        If return_landmarks=True: np.ndarray shape [num_faces, 15]
+        If return_landmarks=False: List of (x, y, w, h) tuples
+        None if no faces detected
     """
     if frame is None or not hasattr(frame, 'shape'):
         raise ValueError("Frame is None or invalid")
     
-    # YuNet requires input image with size exactly input_size
     resized = cv2.resize(frame, input_size)
     detector.setInputSize(input_size)
 
     try:
-        retval, faces = detector.detect(resized)
+        _, faces = detector.detect(resized)
     except Exception as e:
         print(f"Detection error: {e}")
         return None
@@ -126,125 +133,136 @@ def detect_faces(frame, input_size=YUNET_INPUT_SIZE, score_threshold=YUNET_SCORE
     if faces is None or len(faces) == 0:
         return None
 
-    # Optionally re-scale detected boxes/landmarks to original frame size
+    # Rescale to original frame size
     sx = frame.shape[1] / input_size[0]
     sy = frame.shape[0] / input_size[1]
+    
     faces_rescaled = faces.astype(np.float32).copy()
-    faces_rescaled[:, [0, 2, 5, 7, 9,11,13]] *= sx  # x, w, landmarks_x
-    faces_rescaled[:, [1, 3, 6, 8,10,12,14]] *= sy  # y, h, landmarks_y
+    faces_rescaled[:, [0, 2, 5, 7, 9, 11, 13]] *= sx  # x coords
+    faces_rescaled[:, [1, 3, 6, 8, 10, 12, 14]] *= sy  # y coords
 
     if return_landmarks:
-        # Return full face data (box, score, and 5 landmarks) as np.ndarray
         return faces_rescaled
-    else:
-        # Only return bounding boxes [(x, y, w, h), ...]
-        bboxes = faces_rescaled[:, :4].astype(int)
-        return [tuple(bbox) for bbox in bboxes]
+    
+    bboxes = faces_rescaled[:, :4].astype(int)
+    return [tuple(bbox) for bbox in bboxes]
 
-def extract_face_features(frame, face_row):
+
+def extract_face_features(frame: np.ndarray, face_row: np.ndarray) -> Optional[np.ndarray]:
     """
-    Extract 128-dim Sface feature vector from a given face.
+    Extract 128-dim SFace feature vector from a detected face.
 
     Args:
-        frame (np.ndarray): Full BGR image.
-        face_row (array-like): Face detection output row from YuNet [x, y, w, h, score, ...landmarks]
+        frame: Full BGR image
+        face_row: Face detection row from YuNet [x, y, w, h, score, ...landmarks]
+
     Returns:
-        np.ndarray: Face feature vector (128-dim float32 shape).
+        128-dim feature vector (float32) or None on failure
     """
     if frame is None or face_row is None:
         raise ValueError("Input frame or face_row is missing")
+    
     try:
         aligned = recognizer.alignCrop(frame, face_row)
-        feature = recognizer.feature(aligned)
-        return feature
+        return recognizer.feature(aligned)
     except Exception as e:
         print(f"Feature extraction error: {e}")
         return None
 
-def compare_face_features(feature1, feature2, threshold=SFACE_SIMILARITY_THRESHOLD):
+
+def compare_face_features(
+    feature1: np.ndarray,
+    feature2: np.ndarray,
+    threshold: float = SFACE_SIMILARITY_THRESHOLD
+) -> Tuple[float, bool]:
     """
-    Compare two face features and return similarity score + match verdict.
+    Compare two face features using cosine similarity.
 
     Args:
-        feature1, feature2: Output from extract_face_features (np.ndarray, 128-dim)
-        threshold (float): Similarity threshold for "same" acceptance
+        feature1: First 128-dim feature vector
+        feature2: Second 128-dim feature vector
+        threshold: Similarity threshold for match
 
     Returns:
-        (score: float, is_same_person: bool)
+        Tuple of (similarity_score, is_match)
     """
     if feature1 is None or feature2 is None:
-        raise ValueError("Both features must be np.ndarray")
+        raise ValueError("Both features must be provided")
+    
     try:
-        # Uses cosine similarity as default
         score = recognizer.match(feature1, feature2, cv2.FaceRecognizerSF_FR_COSINE)
-        is_match = score >= threshold
-        return score, is_match
+        return float(score), score >= threshold
     except Exception as e:
         print(f"Face comparison error: {e}")
         return 0.0, False
 
-def draw_face_rectangles(frame, faces, color=(0,255,0), thickness=2, labels=None):
+
+def draw_face_rectangles(
+    frame: np.ndarray,
+    faces: Union[np.ndarray, List],
+    color: Tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2,
+    labels: Optional[List[str]] = None
+) -> None:
     """
-    Draw rectangles (and optional labels) on faces on the frame.
+    Draw rectangles and optional labels on detected faces.
 
     Args:
-        frame: image (np.ndarray)
-        faces: list of [x, y, w, h] or [num_faces, 4] ndarray
-        color: BGR tuple
-        thickness: Rectangle line thickness
-        labels: Optional [str] list of annotation for each face
+        frame: Image to draw on (modified in place)
+        faces: List of [x, y, w, h] or ndarray
+        color: BGR color tuple
+        thickness: Line thickness
+        labels: Optional list of labels for each face
     """
     if faces is None:
         return
-    # Accept np.ndarray or list of tuples
-    faces = np.array(faces)
-    for i, face in enumerate(faces):
+    
+    faces_arr = np.array(faces)
+    for i, face in enumerate(faces_arr):
         x, y, w, h = map(int, face[:4])
         cv2.rectangle(frame, (x, y), (x + w, y + h), color, thickness)
+        
         if labels and i < len(labels):
             label = str(labels[i])
-            (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
             cv2.rectangle(frame, (x, y - th - 10), (x + tw, y), color, -1)
-            cv2.putText(frame, label, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)
+            cv2.putText(frame, label, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
         else:
             cv2.putText(frame, "Face", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-def get_face_landmarks(face_row):
+
+def get_face_landmarks(face_row: np.ndarray) -> np.ndarray:
     """
-    Extract landmarks (5 points) from YuNet face detection row.
+    Extract 5-point landmarks from YuNet detection row.
 
     Args:
-        face_row: 15 element np.ndarray from YuNet detection: 
-        [x, y, w, h, score, l0x, l0y, l1x, l1y, ... l4y]
+        face_row: 15-element array [x, y, w, h, score, l0x, l0y, ..., l4y]
+
     Returns:
-        np.ndarray shape [5, 2] for 5 landmark points
+        np.ndarray shape [5, 2] for landmark points:
+        [left_eye, right_eye, nose, left_mouth, right_mouth]
     """
     if face_row is None or len(face_row) < 15:
         raise ValueError("Invalid face_row for landmarks extraction")
-    # landmarks: l0x, l0y, l1x, l1y, ..., l4y
-    landmarks = np.array([
-        [face_row[5],  face_row[6]],   # left eye
-        [face_row[7],  face_row[8]],   # right eye
+    
+    return np.array([
+        [face_row[5], face_row[6]],    # left eye
+        [face_row[7], face_row[8]],    # right eye
         [face_row[9], face_row[10]],   # nose
-        [face_row[11],face_row[12]],   # left mouth
-        [face_row[13],face_row[14]],   # right mouth
+        [face_row[11], face_row[12]],  # left mouth
+        [face_row[13], face_row[14]],  # right mouth
     ], dtype=np.float32)
-    return landmarks
 
 
-def get_face_detector(models_path=DEFAULT_MODELS_DIR):
-    """
-    Get the face detector model.
-    """
+def get_face_detector():
+    """Get the loaded YuNet face detector model."""
     return detector
 
-def get_face_recognizer(models_path=DEFAULT_MODELS_DIR):
-    """
-    Get the face recognizer model.
-    """
+
+def get_face_recognizer():
+    """Get the loaded SFace face recognizer model."""
     return recognizer
 
-# --------------- MAIN API EXPORTS ---------------
 
 __all__ = [
     'detect_faces',
@@ -252,8 +270,10 @@ __all__ = [
     'compare_face_features',
     'draw_face_rectangles',
     'get_face_landmarks',
+    'get_face_detector',
+    'get_face_recognizer',
     'YUNET_PATH',
     'SFACE_PATH',
     'YUNET_INPUT_SIZE',
-    'SFACE_SIMILARITY_THRESHOLD'
+    'SFACE_SIMILARITY_THRESHOLD',
 ]
