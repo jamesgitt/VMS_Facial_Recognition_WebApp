@@ -89,7 +89,6 @@ DB_TABLE_NAME = os.environ.get("DB_TABLE_NAME", 'public."Visitor"')
 DB_VISITOR_ID_COLUMN = os.environ.get("DB_VISITOR_ID_COLUMN", "id")
 DB_IMAGE_COLUMN = os.environ.get("DB_IMAGE_COLUMN", "base64Image")
 DB_FEATURES_COLUMN = os.environ.get("DB_FEATURES_COLUMN", "facefeatures")
-DB_ACTIVE_ONLY = os.environ.get("DB_ACTIVE_ONLY", "false").lower() == "true"
 DB_VISITOR_LIMIT = int(os.environ.get("DB_VISITOR_LIMIT", "0")) or None
 
 
@@ -255,8 +254,7 @@ def load_visitors_from_database(manager: Optional[Any]) -> int:
             visitor_id_column=DB_VISITOR_ID_COLUMN,
             image_column=DB_IMAGE_COLUMN,
             features_column=DB_FEATURES_COLUMN,
-            limit=DB_VISITOR_LIMIT,
-            active_only=DB_ACTIVE_ONLY
+            limit=DB_VISITOR_LIMIT
         )
         print(f"[OK] Found {len(visitors)} visitors in database")
         
@@ -587,8 +585,7 @@ async def recognize_visitor_api(
                     table_name=DB_TABLE_NAME,
                     visitor_id_column=DB_VISITOR_ID_COLUMN,
                     image_column=DB_IMAGE_COLUMN,
-                    limit=DB_VISITOR_LIMIT,
-                    active_only=DB_ACTIVE_ONLY
+                    limit=DB_VISITOR_LIMIT
                 )
                 
                 for visitor_data in visitors:
