@@ -87,7 +87,7 @@ def extract_feature_from_image(base64_image: str) -> Optional[np.ndarray]:
         img_cv = image_loader.load_from_base64(base64_image)
         
         faces = inference.detect_faces(img_cv, return_landmarks=True)
-        if not faces:
+        if faces is None or len(faces) == 0:
             return None
         
         feature = inference.extract_face_features(img_cv, faces[0])

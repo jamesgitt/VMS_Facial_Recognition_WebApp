@@ -151,7 +151,7 @@ def extract_feature_from_visitor_data(visitor_data: dict) -> Optional[np.ndarray
         
         img_cv = image_loader.load_from_base64(base64_data)
         faces = inference.detect_faces(img_cv, return_landmarks=True)
-        if not faces:
+        if faces is None or len(faces) == 0:
             return None
         
         feature = inference.extract_face_features(img_cv, faces[0])
@@ -289,7 +289,7 @@ def load_visitors_from_test_images(manager: Optional[Any]) -> int:
         try:
             img_cv = image_loader.load_from_path(fpath)
             faces = inference.detect_faces(img_cv, return_landmarks=True)
-            if not faces:
+            if faces is None or len(faces) == 0:
                 continue
             
             feature = inference.extract_face_features(img_cv, faces[0])
@@ -480,7 +480,7 @@ async def extract_features_api(
     image_loader.validate_image_size((img_np.shape[1], img_np.shape[0]), MAX_IMAGE_SIZE)
     
     faces = inference.detect_faces(img_np, return_landmarks=True)
-    if not faces:
+    if faces is None or len(faces) == 0:
         return FeatureExtractionResponse(features=[], num_faces=0)
     
     features_list = []
@@ -505,9 +505,9 @@ async def compare_faces_api(request: CompareRequest):
         faces1 = inference.detect_faces(img1, return_landmarks=True)
         faces2 = inference.detect_faces(img2, return_landmarks=True)
         
-        if not faces1:
+        if faces1 is None or len(faces1) == 0:
             raise HTTPException(status_code=400, detail="No face in image1")
-        if not faces2:
+        if faces2 is None or len(faces2) == 0:
             raise HTTPException(status_code=400, detail="No face in image2")
         
         feature1 = inference.extract_face_features(img1, faces1[0])
@@ -554,7 +554,7 @@ async def recognize_visitor_api(
         raise HTTPException(status_code=400, detail=f"Failed to load image: {e}")
     
     faces = inference.detect_faces(img_np, return_landmarks=True)
-    if not faces:
+    if faces is None or len(faces) == 0:
         return VisitorRecognitionResponse(matched=False, matches=[])
     
     query_feature = inference.extract_face_features(img_np, faces[0])
@@ -610,7 +610,7 @@ async def recognize_visitor_api(
                         try:
                             img_cv_db = image_loader.load_from_base64(base64_image)
                             db_faces = inference.detect_faces(img_cv_db, return_landmarks=True)
-                            if not db_faces:
+                            if db_faces is None or len(db_faces) == 0:
                                 continue
                             db_feature = inference.extract_face_features(img_cv_db, db_faces[0])
                             if db_feature is None:

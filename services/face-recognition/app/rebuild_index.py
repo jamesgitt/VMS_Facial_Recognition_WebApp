@@ -104,7 +104,7 @@ def _extract_from_image(visitor_data: dict) -> Optional[np.ndarray]:
         image = image_loader.load_from_base64(base64_image)
         faces = inference.detect_faces(image, return_landmarks=True)
         
-        if not faces:
+        if faces is None or len(faces) == 0:
             return None
         
         feature = inference.extract_face_features(image, faces[0])
