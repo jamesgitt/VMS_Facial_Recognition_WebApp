@@ -1,9 +1,6 @@
 """
 Face Recognition ML Microservice - Main Entry Point
 
-This is the main entry point for running the Face Recognition API service.
-It can be used to run the service locally or as a production entry point.
-
 Usage:
     python main.py                    # Run with default settings
     python main.py --host 0.0.0.0     # Run on specific host
@@ -15,49 +12,45 @@ import os
 import sys
 import argparse
 from pathlib import Path
+from typing import Optional
 
-# Load environment variables from .env file if it exists
+# Script directory
+_SCRIPT_DIR = Path(__file__).parent
+
+# Load environment variables
 try:
     from dotenv import load_dotenv
-    # Try to load .env from parent directory (services/face-recognition/.env)
-    _SCRIPT_DIR = Path(__file__).parent
-    env_file = _SCRIPT_DIR.parent / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
-        print(f"✓ Loaded environment variables from {env_file}")
-    else:
-        # Also try current directory
-        load_dotenv(_SCRIPT_DIR / ".env")
+    for env_path in [_SCRIPT_DIR.parent / ".env", _SCRIPT_DIR / ".env"]:
+        if env_path.exists():
+            load_dotenv(env_path)
+            print(f"[OK] Loaded environment from {env_path}")
+            break
 except ImportError:
-    # python-dotenv not installed, skip .env loading
     pass
 
-# Ensure the script directory is in Python path for imports
-_SCRIPT_DIR = Path(__file__).parent
+# Ensure script directory is in Python path
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 import uvicorn
 
-# Import the FastAPI app (both files are in the same directory in Docker)
-# In Docker: working directory is /app/app, so both files are directly accessible
+# Import FastAPI app
 try:
     from face_recog_api import app
 except ImportError:
-    # Fallback for local development if running from parent directory
     from app.face_recog_api import app
 
-# Try to import download_models from download_models.py
-try:
-    from download_models import download_models
-except ImportError:
-    # Fallback for local development if running from parent directory
-    try:
-        from app.download_models import download_models
-    except ImportError:
-        download_models = None
+# Model file names (shared constants)
+YUNET_FILENAME = 'face_detection_yunet_2023mar.onnx'
+SFACE_FILENAME = 'face_recognition_sface_2021dec.onnx'
 
-def check_models_exist(models_path: str = None) -> bool:
+
+def get_models_path() -> Path:
+    """Get the models directory path."""
+    return Path(os.environ.get("MODELS_PATH", str(_SCRIPT_DIR / "models")))
+
+
+def check_models_exist(models_path: Optional[Path] = None) -> bool:
     """
     Check if required ONNX model files exist.
     
@@ -68,26 +61,57 @@ def check_models_exist(models_path: str = None) -> bool:
         True if all models exist, False otherwise.
     """
     if models_path is None:
-        models_path = os.environ.get("MODELS_PATH", str(_SCRIPT_DIR / "models"))
+        models_path = get_models_path()
     
-    models_dir = Path(models_path)
-    yunet_path = models_dir / "face_detection_yunet_2023mar.onnx"
-    sface_path = models_dir / "face_recognition_sface_2021dec.onnx"
+    yunet_path = models_path / YUNET_FILENAME
+    sface_path = models_path / SFACE_FILENAME
     
     if not yunet_path.exists():
-        print(f"ERROR: YuNet model not found at {yunet_path}")
+        print(f"[ERROR] YuNet model not found at {yunet_path}")
         return False
     
     if not sface_path.exists():
-        print(f"ERROR: Sface model not found at {sface_path}")
+        print(f"[ERROR] SFace model not found at {sface_path}")
         return False
     
-    print(f"✓ Models found in {models_dir}")
+    print(f"[OK] Models found in {models_path}")
     return True
 
 
-def main():
-    """Main entry point for the Face Recognition API service."""
+def download_models_if_needed(models_path: Path) -> bool:
+    """
+    Attempt to download models if they don't exist.
+    
+    Returns:
+        True if models are available after this call, False otherwise.
+    """
+    if check_models_exist(models_path):
+        return True
+    
+    print("\nModels not found. Attempting to download...\n")
+    
+    try:
+        from download_models import main as download_main
+        download_main()
+        return check_models_exist(models_path)
+    except ImportError:
+        pass
+    
+    try:
+        from app.download_models import main as download_main
+        download_main()
+        return check_models_exist(models_path)
+    except ImportError:
+        pass
+    
+    print("[ERROR] Cannot import download_models module.")
+    print(f"\nTo download models manually, run:")
+    print(f"  python {_SCRIPT_DIR / 'download_models.py'}")
+    return False
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and return the argument parser."""
     parser = argparse.ArgumentParser(
         description="Face Recognition ML Microservice",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -95,8 +119,8 @@ def main():
 Examples:
   python main.py                          # Run with defaults
   python main.py --host 0.0.0.0 --port 8000
-  python main.py --reload                 # Development mode with auto-reload
-  python main.py --workers 4              # Production mode with 4 workers
+  python main.py --reload                 # Development mode
+  python main.py --workers 4              # Production mode
         """
     )
     
@@ -104,29 +128,25 @@ Examples:
         "--host",
         type=str,
         default=os.environ.get("API_HOST", "0.0.0.0"),
-        help="Host to bind to (default: from API_HOST env var or 0.0.0.0)"
+        help="Host to bind to (default: API_HOST env or 0.0.0.0)"
     )
-    
     parser.add_argument(
         "--port",
         type=int,
         default=int(os.environ.get("API_PORT", "8000")),
-        help="Port to bind to (default: from API_PORT env var or 8000)"
+        help="Port to bind to (default: API_PORT env or 8000)"
     )
-    
     parser.add_argument(
         "--reload",
         action="store_true",
-        help="Enable auto-reload for development (default: False)"
+        help="Enable auto-reload for development"
     )
-    
     parser.add_argument(
         "--workers",
         type=int,
         default=1,
-        help="Number of worker processes (default: 1, use 1 for development)"
+        help="Number of worker processes (default: 1)"
     )
-    
     parser.add_argument(
         "--log-level",
         type=str,
@@ -134,78 +154,79 @@ Examples:
         choices=["critical", "error", "warning", "info", "debug", "trace"],
         help="Log level (default: info)"
     )
-    
     parser.add_argument(
         "--skip-model-check",
         action="store_true",
-        help="Skip checking if models exist before starting (default: False)"
+        help="Skip checking if models exist before starting"
     )
     
+    return parser
+
+
+def print_startup_info(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
+    """Print server startup information."""
+    print("\n" + "=" * 60)
+    print("Face Recognition ML Microservice")
+    print("=" * 60)
+    print(f"Host:        {host}")
+    print(f"Port:        {port}")
+    print(f"Workers:     {workers}")
+    print(f"Reload:      {reload}")
+    print(f"Log Level:   {log_level}")
+    print("=" * 60)
+    print(f"\nAPI: http://{host}:{port}")
+    print(f"Docs: http://{host}:{port}/docs")
+    print(f"Health: http://{host}:{port}/api/v1/health")
+    print("\nPress Ctrl+C to stop\n")
+
+
+def run_server(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
+    """Configure and run the uvicorn server."""
+    config = uvicorn.Config(
+        app=app,
+        host=host,
+        port=port,
+        reload=reload,
+        workers=1 if reload else workers,
+        log_level=log_level,
+        access_log=True,
+    )
+    server = uvicorn.Server(config)
+    server.run()
+
+
+def main() -> int:
+    """
+    Main entry point for the Face Recognition API service.
+    
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    parser = create_parser()
     args = parser.parse_args()
     
     # Check models exist (unless skipped)
     if not args.skip_model_check:
-        # In Docker: MODELS_PATH is /app/app/models, default to models/ relative to script
-        models_path = os.environ.get("MODELS_PATH", str(_SCRIPT_DIR / "models"))
-        if not check_models_exist(models_path):
-            print("\nModels not found. Attempting to download models...\n")
-            if download_models is not None:
-                try:
-                    download_models(destination=models_path)
-                except TypeError:
-                    # If old signature, fallback to calling without arguments
-                    download_models()
-                # Check again after download
-                if not check_models_exist(models_path):
-                    print("ERROR: Models could not be downloaded or found!")
-                    sys.exit(1)
-            else:
-                print("ERROR: Cannot find or import 'download_models'. Please ensure download_models.py is present.")
-                print("\nTo download models, run:")
-                print(f"  python {_SCRIPT_DIR / 'download_models.py'}")
-                sys.exit(1)
+        if not download_models_if_needed(get_models_path()):
+            return 1
     
     # Validate workers and reload combination
     if args.reload and args.workers > 1:
-        print("WARNING: --reload is not compatible with multiple workers. Using 1 worker.")
+        print("[WARNING] --reload not compatible with multiple workers. Using 1 worker.")
         args.workers = 1
     
-    # Print startup information
-    print("\n" + "="*60)
-    print("Face Recognition ML Microservice")
-    print("="*60)
-    print(f"Host:        {args.host}")
-    print(f"Port:        {args.port}")
-    print(f"Workers:     {args.workers}")
-    print(f"Reload:      {args.reload}")
-    print(f"Log Level:   {args.log_level}")
-    print("="*60)
-    print(f"\nAPI will be available at: http://{args.host}:{args.port}")
-    print(f"API Documentation: http://{args.host}:{args.port}/docs")
-    print(f"Health Check: http://{args.host}:{args.port}/api/v1/health")
-    print("\nPress Ctrl+C to stop the server\n")
+    print_startup_info(args.host, args.port, args.workers, args.reload, args.log_level)
     
-    # Run the server
     try:
-        # Use app object directly for better compatibility
-        config = uvicorn.Config(
-            app=app,
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-            workers=args.workers if not args.reload else 1,
-            log_level=args.log_level,
-            access_log=True,
-        )
-        server = uvicorn.Server(config)
-        server.run()
+        run_server(args.host, args.port, args.workers, args.reload, args.log_level)
+        return 0
     except KeyboardInterrupt:
         print("\n\nShutting down server...")
-        sys.exit(0)
+        return 0
     except Exception as e:
-        print(f"\nERROR: Failed to start server: {e}")
-        sys.exit(1)
+        print(f"\n[ERROR] Failed to start server: {e}")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
