@@ -22,3 +22,6 @@ psycopg2-binary>=2.9.9
 
 # Environment Variables
 python-dotenv>=1.0.0
+
+# HTTP Requests (for URL image loading)
+requests>=2.31.0
