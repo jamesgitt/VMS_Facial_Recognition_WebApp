@@ -34,6 +34,11 @@ interface RecognitionResponse {
   }>;
 }
 
+// Fixed output dimensions for consistent face recognition
+// Must match the resolution used for stored photos
+const OUTPUT_WIDTH = 640;
+const OUTPUT_HEIGHT = 480;
+
 export function FaceRecognitionCamera() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -144,8 +149,8 @@ export function FaceRecognitionCamera() {
       setStatus("Requesting camera permission...");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: OUTPUT_WIDTH },
+          height: { ideal: OUTPUT_HEIGHT },
         },
       });
 
@@ -154,14 +159,15 @@ export function FaceRecognitionCamera() {
         streamRef.current = stream;
         await videoRef.current.play();
 
-        // Set canvas size to match video
-        if (canvasRef.current && videoRef.current) {
-          canvasRef.current.width = videoRef.current.videoWidth;
-          canvasRef.current.height = videoRef.current.videoHeight;
+        // Set canvas to FIXED output size for consistent face recognition
+        // This ensures we always send images at the same resolution as stored photos
+        if (canvasRef.current) {
+          canvasRef.current.width = OUTPUT_WIDTH;
+          canvasRef.current.height = OUTPUT_HEIGHT;
         }
 
         setIsRunning(true);
-        setStatus("Camera active - Processing frames...");
+        setStatus(`Camera active - Output: ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}`);
         // Processing will start automatically via useEffect when isRunning changes
       }
     } catch (error) {
