@@ -1,8 +1,8 @@
-# Docker Compose for VMS Facial Recognition - Staging with HTTPS
+# Docker Compose for VMS Facial Recognition - Staging (HTTP only)
 # Uses external Azure PostgreSQL database
 
 services:
-  # FastAPI Backend (Face Recognition API) with HTTPS
+  # FastAPI Backend (Face Recognition API) with HTTP only
   backend:
     build:
       context: ./services/face-recognition
@@ -11,12 +11,11 @@ services:
     env_file:
       - ./services/face-recognition/.env.test
     ports:
-      - "8443:8443"  # HTTPS port
-      - "8000:8000"  # HTTP port (optional, for internal access)
+      - "8000:8000"  # HTTP port
     volumes:
       - ./services/face-recognition/app/models:/app/app/models:ro
       - ./services/face-recognition/test_images:/app/app/test_images:ro
-      - ./services/face-recognition/certs:/app/certs:ro  # SSL certificates
+      # Removed SSL certificate mount for HTTP only
     environment:
       - PYTHONUNBUFFERED=1
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
@@ -30,15 +29,13 @@ services:
       - DB_FEATURES_COLUMN=${DB_FEATURES_COLUMN:-facefeatures}
       - DB_VISITOR_LIMIT=${DB_VISITOR_LIMIT:-0}
       - API_HOST=0.0.0.0
-      - API_PORT=8443
+      - API_PORT=8000
     command: >
       uvicorn face_recog_api:app 
       --host 0.0.0.0 
-      --port 8443 
-      --ssl-keyfile /app/certs/key.pem 
-      --ssl-certfile /app/certs/cert.pem
+      --port 8000
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; import ssl; ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE; urllib.request.urlopen('https://localhost:8443/api/v1/health', context=ctx)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
