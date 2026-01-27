@@ -1,35 +1,34 @@
 # Face Recognition Backend API
 
-A high-performance REST API for face detection and recognition using YuNet (face detection) and Sface (face recognition) ONNX models. Features PostgreSQL database integration, HNSW-based approximate nearest neighbor search for fast recognition, and WebSocket support for real-time processing.
+A modern REST API for face detection and recognition using YuNet (face detection) and SFace (face recognition) ONNX models. Features include PostgreSQL integration for persistent visitor storage, HNSW-based fast approximate nearest neighbor search for recognition, and WebSocket endpoints for real-time image processing.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - **Python 3.11 or 3.12** (recommended)
-- **Docker and Docker Compose** (recommended)
-- **PostgreSQL** (optional, falls back to test images if not configured)
+- **Docker & Docker Compose** (recommended)
+- **PostgreSQL** (optional; falls back to test_images/ directory if not provided)
 
-### Docker Deployment (Recommended)
+### Deploy with Docker (Recommended)
 
-**Start the backend service:**
+Start the backend service:
 ```bash
 docker compose up -d backend
 ```
+Once running, access the API at: **http://localhost:8000**
 
-The API will be available at: **http://localhost:8000**
-
-**Access API documentation:**
-- Interactive API Docs: http://localhost:8000/docs
-- OpenAPI Schema: http://localhost:8000/openapi.json
+API documentation:
+- Swagger UI: http://localhost:8000/docs
+- OpenAPI schema: http://localhost:8000/openapi.json
 
 ### Local Development Setup
 
-1. **Create virtual environment:**
+1. **Create a virtual environment:**
    ```bash
    python -m venv venvback
    ```
 
-2. **Activate virtual environment:**
+2. **Activate the virtual environment:**
    - **Windows (PowerShell):** `.\venvback\Scripts\Activate.ps1`
    - **Windows (CMD):** `venvback\Scripts\activate.bat`
    - **Linux/Mac:** `source venvback/bin/activate`
@@ -40,16 +39,16 @@ The API will be available at: **http://localhost:8000**
    pip install -r requirements.txt
    ```
 
-4. **Download models:**
+4. **Download face models:**
    ```bash
    python app/download_models.py
    ```
-   This downloads:
-   - `face_detection_yunet_2023mar.onnx` (YuNet face detector)
-   - `face_recognition_sface_2021dec.onnx` (Sface face recognizer)
+   This will download:
+   - `face_detection_yunet_2023mar.onnx`
+   - `face_recognition_sface_2021dec.onnx`
 
-5. **Set environment variables:**
-   Create a `.env` file in `services/face-recognition/`:
+5. **Define environment variables:**
+   Create a file named `.env` in `services/face-recognition/` (example below):
    ```env
    MODELS_PATH=app/models
    CORS_ORIGINS=http://localhost:3000,http://localhost:3001
@@ -63,7 +62,7 @@ The API will be available at: **http://localhost:8000**
    DB_TABLE_NAME=visitors
    ```
 
-6. **Run the API:**
+6. **Launch the API locally:**
    ```bash
    cd app
    uvicorn face_recog_api:app --host 0.0.0.0 --port 8000 --reload
@@ -71,114 +70,97 @@ The API will be available at: **http://localhost:8000**
 
 ## 📋 API Endpoints
 
-### Health & Status
-- `GET /api/v1/health` - Health check endpoint
-- `GET /api/v1/models/status` - Check if models are loaded
-- `GET /api/v1/models/info` - Get model metadata and information
-- `GET /api/v1/hnsw/status` - Get HNSW index status (if enabled)
+### Health & Model Status
+- `GET /api/v1/health` — Service health check
+- `GET /api/v1/models/status` — Model loading status
+- `GET /api/v1/models/info` — Model details
+- `GET /api/v1/hnsw/status` — HNSW index status
 
 ### Face Detection
-- `POST /api/v1/detect` - Detect faces in an image
-  - **Input:** JSON with `image` (base64) or multipart form with `file`
-  - **Output:** List of detected faces with bounding boxes, landmarks, and confidence scores
+- `POST /api/v1/detect`
+  - **Input:** JSON `{ image: base64 }` or form file upload
+  - **Output:** Faces detected (boxes, landmarks, confidence)
 
 ### Face Recognition
-- `POST /api/v1/recognize` - Recognize a face against database visitors
-  - **Input:** JSON with `image` (base64) or multipart form with `file`
-  - **Output:** Matched visitor ID, confidence score, and top matches
-  - **Features:** Uses HNSW index for fast approximate nearest neighbor search
+- `POST /api/v1/recognize`
+  - **Input:** JSON `{ image: base64 }` or form file upload
+  - **Output:** Visitor ID match, confidence score, and top-N results
 
 ### Face Comparison
-- `POST /api/v1/compare` - Compare two faces
-  - **Input:** JSON with `image1` and `image2` (base64)
-  - **Output:** Similarity score and match verdict
+- `POST /api/v1/compare`
+  - **Input:** JSON `{ image1, image2 }` (base64)
+  - **Output:** Cosine similarity score and match verdict
 
 ### Feature Extraction
-- `POST /api/v1/extract-features` - Extract face feature vectors
-  - **Input:** JSON with `image` (base64)
-  - **Output:** 128-dimensional feature vector
+- `POST /api/v1/extract-features`
+  - **Input:** JSON `{ image: base64 }`
+  - **Output:** 128-d feature vector
 
 ### Image Validation
-- `POST /api/v1/validate-image` - Validate image before processing
-  - **Input:** JSON with `image` (base64) or multipart form with `file`
-  - **Output:** Validation result with format, size, and data checks
+- `POST /api/v1/validate-image`
+  - **Input:** JSON `{ image: base64 }` or file upload
+  - **Output:** Image validation metadata (format, size, etc.)
 
-### Real-time Processing
-- `WebSocket /ws/realtime` - Real-time face detection/recognition
-  - **Protocol:** Send base64 images, receive detection/recognition results
-  - **Use cases:** Live camera feeds, video processing
+### Real-Time Processing
+- `WebSocket /ws/realtime`
+  - Bidirectional real-time detection/recognition (send base64 images, receive results)
+  - For live camera or video processing
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-#### Core Settings
-- `MODELS_PATH` - Path to models directory (default: `/app/app/models` in Docker, `app/models` locally)
-- `CORS_ORIGINS` - Comma-separated list of allowed CORS origins (default: `*`)
+#### Core
+- `MODELS_PATH`: Path to model files (default `/app/app/models` in Docker, `app/models` locally)
+- `CORS_ORIGINS`: CSV of allowed origins for CORS (default: `*`)
 
-#### Database Configuration
-- `USE_DATABASE` - Enable database integration (`true`/`false`, default: `false`)
-- `DATABASE_URL` - PostgreSQL connection string
-- `DB_HOST` - Database host (default: `localhost`)
-- `DB_PORT` - Database port (default: `5432`)
-- `DB_NAME` - Database name (default: `visitors_db`)
-- `DB_USER` - Database user (default: `postgres`)
-- `DB_PASSWORD` - Database password (default: `postgres`)
-- `DB_TABLE_NAME` - Table name for visitors (default: `visitors`)
-- `DB_VISITOR_ID_COLUMN` - Column name for visitor ID (default: `id`)
-- `DB_IMAGE_COLUMN` - Column name for base64 image data (default: `base64Image`)
-- `DB_FEATURES_COLUMN` - Column name for pre-extracted features (default: `facefeatures`)
-- `DB_VISITOR_LIMIT` - Limit number of visitors loaded (default: `0` = no limit)
+#### Database
+- `USE_DATABASE`: Enable PostgreSQL visitor database (`true`/`false`, default: `false`)
+- `DATABASE_URL`: Full DB connection string
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_TABLE_NAME`: Individual DB settings
+- `DB_VISITOR_ID_COLUMN`, `DB_IMAGE_COLUMN`, `DB_FEATURES_COLUMN`: (advanced overrides)
+- `DB_VISITOR_LIMIT`: Limit loaded visitors (default: 0 = all)
 
 #### Model Parameters
-- `YUNET_SCORE_THRESHOLD` - Face detection confidence threshold (default: `0.6`)
-- `SFACE_SIMILARITY_THRESHOLD` - Face recognition similarity threshold (default: `0.55`)
+- `YUNET_SCORE_THRESHOLD`: Face detection (default: `0.6`)
+- `SFACE_SIMILARITY_THRESHOLD`: Matching (default: `0.55`)
 
-### Example API Request
+#### Example API Requests
 
 ```bash
 # Health check
 curl http://localhost:8000/api/v1/health
 
-# Detect faces
+# Face detection
 curl -X POST http://localhost:8000/api/v1/detect \
   -H "Content-Type: application/json" \
-  -d '{
-    "image": "base64_encoded_image_here",
-    "score_threshold": 0.6
-  }'
+  -d '{"image": "base64_encoded_image_here", "score_threshold": 0.6}'
 
-# Recognize face
+# Face recognition
 curl -X POST http://localhost:8000/api/v1/recognize \
   -H "Content-Type: application/json" \
-  -d '{
-    "image": "base64_encoded_image_here",
-    "threshold": 0.55
-  }'
+  -d '{"image": "base64_encoded_image_here", "threshold": 0.55}'
 
-# Compare two faces
+# Compare faces
 curl -X POST http://localhost:8000/api/v1/compare \
   -H "Content-Type: application/json" \
-  -d '{
-    "image1": "base64_image1_here",
-    "image2": "base64_image2_here"
-  }'
+  -d '{"image1": "base64_image1_here", "image2": "base64_image2_here"}'
 ```
 
 ## 🗄️ Database Integration
 
-The backend supports PostgreSQL for persistent visitor storage. If the database is not configured or unavailable, the service automatically falls back to loading visitors from the `test_images/` directory.
+The backend supports saving visitor records in PostgreSQL. If unavailable or not configured, the service defaults to the `test_images/` folder for recognition.
 
-### Database Schema
+### DB Table Expectation
 
-The service expects a `visitors` table with the following columns:
-- `id` - Visitor ID (primary key)
-- `base64Image` - Base64-encoded image data
-- `facefeatures` - Optional: Pre-extracted 128-dimensional feature vector (JSON array)
+A `visitors` table should contain:
+- `id`: Primary key
+- `base64Image`: Visitor image (base64)
+- `facefeatures`: (optional) 128-d feature vector (JSON array)
 
-### Feature Extraction Script
+### Batch Feature Extraction
 
-Extract and store face features in the database for faster recognition:
+Pre-extract face features for every visitor (speeds up recognition):
 
 ```bash
 python app/extract_features_to_db.py \
@@ -192,17 +174,10 @@ python app/extract_features_to_db.py \
 
 ## 🔍 HNSW Index
 
-The backend uses HNSW (Hierarchical Navigable Small World) for fast approximate nearest neighbor search, enabling efficient recognition across large visitor databases.
+HNSW enables fast similarity search (O(log n)), auto-indexes on startup, and provides persistence between restarts.
+- If unavailable, service falls back to linear (slow) search.
 
-### Features
-- **Fast Recognition:** O(log n) search complexity vs O(n) linear search
-- **Automatic Indexing:** Index is built automatically on startup from database visitors
-- **Persistent Storage:** Index is saved to disk and reloaded on restart
-- **Fallback Support:** Automatically falls back to linear search if HNSW is unavailable
-
-### Index Status
-
-Check index status:
+Check status:
 ```bash
 curl http://localhost:8000/api/v1/hnsw/status
 ```
@@ -212,137 +187,126 @@ curl http://localhost:8000/api/v1/hnsw/status
 ```
 services/face-recognition/
 ├── app/
-│   ├── face_recog_api.py      # FastAPI application and endpoints
-│   ├── inference.py            # ML inference (detection & recognition)
-│   ├── database.py             # PostgreSQL database operations
-│   ├── hnsw_index.py           # HNSW index manager
-│   ├── image_loader.py         # Image loading and validation utilities
-│   ├── download_models.py      # Model downloader script
-│   ├── extract_features_to_db.py  # Feature extraction script
-│   └── models/                 # ONNX model files
+│   ├── face_recog_api.py
+│   ├── inference.py
+│   ├── database.py
+│   ├── hnsw_index.py
+│   ├── image_loader.py
+│   ├── download_models.py
+│   ├── extract_features_to_db.py
+│   └── models/
 │       ├── face_detection_yunet_2023mar.onnx
 │       └── face_recognition_sface_2021dec.onnx
-├── test_images/                # Test images for fallback recognition
-├── Dockerfile                  # Container definition
-├── requirements.txt            # Python dependencies
-└── README.md                   # Service documentation
+├── test_images/
+├── Dockerfile
+├── requirements.txt
+└── README.md
 ```
 
-## 🐳 Docker Commands
+## 🐳 Frequently Used Docker Commands
 
 ```bash
 # Build backend image
 docker compose build backend
 
-# Start backend service
+# Start backend
 docker compose up -d backend
 
-# View logs
+# See live logs
 docker compose logs -f backend
 
-# Stop service
+# Stop
 docker compose down backend
 
-# Rebuild after code changes
+# Rebuild after changes
 docker compose up --build backend
 
-# Execute commands in container
+# Run script in container
 docker compose exec backend python app/download_models.py
 ```
 
-## 🧪 Testing
+## 🧪 Testing API
 
-### Test Face Detection
+**Face Detection**
 ```bash
 curl -X POST http://localhost:8000/api/v1/detect \
   -F "file=@path/to/image.jpg"
 ```
 
-### Test Face Recognition
+**Face Recognition**
 ```bash
 curl -X POST http://localhost:8000/api/v1/recognize \
   -F "file=@path/to/image.jpg"
 ```
 
-### Test Health Endpoint
+**Health Check**
 ```bash
 curl http://localhost:8000/api/v1/health
 ```
 
-## 🐛 Troubleshooting
+## 🐛 Troubleshooting Tips
 
 ### Models Not Found
-Ensure models are in the correct directory:
+Make sure models exist in `app/models/`:
 ```bash
-# Check models exist
 ls services/face-recognition/app/models/
-# Should show:
-# face_detection_yunet_2023mar.onnx
-# face_recognition_sface_2021dec.onnx
+# Should list the two ONNX models
 
-# Download models if missing
+# To download models:
 cd services/face-recognition
 python app/download_models.py
 ```
 
-### Database Connection Issues
-- Check PostgreSQL is running: `docker compose ps postgres`
-- Verify connection string in environment variables
-- Service will automatically fall back to `test_images/` if database is unavailable
+### Database Connection Problems
+- Ensure PostgreSQL is running: `docker compose ps postgres`
+- Confirm all DB settings in `.env`
+- If DB fails, fallback is `test_images/`
 
-### Port Already in Use
-Change port mapping in `docker-compose.yml`:
+### Port Conflicts
+Change API port in `docker-compose.yml`:
 ```yaml
 ports:
-  - "8001:8000"  # Use port 8001 instead
+  - "8001:8000"
 ```
 
-### HNSW Index Not Building
-- Check database has visitors with valid images
-- Review logs: `docker compose logs backend`
-- Index building happens synchronously on startup (may take several minutes for large databases)
+### HNSW Indexing Issues
+- Verify visitor records have valid images/features
+- Check logs: `docker compose logs backend`
+- Index build may take a while on large datasets
 
-## 📚 Dependencies
+## 📚 Major Dependencies
 
-The following are the main dependencies. For the full list and exact versions, see `services/face-recognition/requirements.txt`.
+See `requirements.txt` for details, but includes:
 
-### Core Libraries
-- `fastapi` - Modern web framework for building APIs
-- `uvicorn` - ASGI server
-- `opencv-python` - Computer vision and image processing
-- `numpy` - Numerical computing
-- `Pillow` - Image processing
+- `fastapi` (API)
+- `uvicorn` (ASGI server)
+- `opencv-python` (vision)
+- `numpy` (numerics)
+- `Pillow` (image)
+- `hnswlib` (nearest neighbor search)
+- `psycopg2-binary` (PostgreSQL)
+- `pydantic` (validation)
+- `python-dotenv` (env loader)
+- `websockets` (WS support)
 
-### Machine Learning
-- `hnswlib` - HNSW approximate nearest neighbor search
+> **Note:** DeepFace or TensorFlow are optional—install manually if you need them.
 
-### Database
-- `psycopg2-binary` - PostgreSQL adapter
+## 🚢 Production Deployment Tips
 
-### Utilities
-- `pydantic` - Data validation
-- `python-dotenv` - Environment variable management
-- `websockets` - WebSocket support
+- Set CORS origins appropriately
+- Use secure production DB credentials
+- Enable HNSW for performance
+- Prefer a reverse proxy (nginx/traefik) for HTTPS
+- Add robust health checks and monitoring
+- Use Docker Compose or Kubernetes for scaling/HA
 
-> **Note:** If your use case requires DeepFace or TensorFlow, you must install them manually, as they are no longer part of the requirements.txt by default.
-
-## 🚢 Production Deployment
-
-### Considerations
-1. **Set proper CORS origins** in environment variables
-2. **Use environment-specific database credentials**
-3. **Enable HNSW index** for large visitor databases
-4. **Configure reverse proxy** (nginx/traefik) for SSL termination
-5. **Set up monitoring** and health checks
-6. **Scale horizontally** using Docker Compose or Kubernetes
-
-### Cloud Deployment Options
-- **AWS ECS/Fargate**
-- **Google Cloud Run**
-- **Azure Container Instances**
-- **DigitalOcean App Platform**
-- **Kubernetes**
+### Cloud Options
+- AWS ECS/Fargate
+- Google Cloud Run
+- Azure Container Instances
+- DigitalOcean App Platform
+- Kubernetes
 
 ## 📝 License
 
-[Your License Here]
+[Specify your license here]
