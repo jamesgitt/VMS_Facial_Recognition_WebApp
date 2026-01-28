@@ -24,7 +24,6 @@ from ml import inference
 from utils import image_loader
 
 # Import other pipelines
-from .detection import detect_faces_in_image
 from .feature_extraction import extract_single_feature
 
 

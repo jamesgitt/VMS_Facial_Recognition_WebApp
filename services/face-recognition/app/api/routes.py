@@ -8,7 +8,7 @@ import io
 import base64
 import datetime
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from PIL import Image
 
 from core.logger import get_logger
@@ -48,8 +48,6 @@ from pipelines import (
 
 from utils import image_loader
 from ml import inference
-
-from .deps import get_state, require_initialized, get_threshold
 
 logger = get_logger(__name__)
 
