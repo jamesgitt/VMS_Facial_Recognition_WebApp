@@ -24,6 +24,7 @@ import pickle
 import datetime
 from typing import List, Tuple, Optional, Any
 from pathlib import Path
+from logger import logger
 
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, WebSocket, WebSocketDisconnect
@@ -52,7 +53,7 @@ try:
     DB_AVAILABLE = True
 except ImportError:
     DB_AVAILABLE = False
-    print("[WARNING] Database module not available. Using test images fallback.")
+    logger.warning("Database module not available. Using test images fallback.")
 
 # Optional HNSW index
 try:
@@ -61,7 +62,7 @@ try:
 except ImportError:
     HNSW_AVAILABLE = False
     HNSWIndexManager = None
-    print("[WARNING] HNSW index not available. Using linear search.")
+    logger.warning("HNSW index not available. Using linear search.")
 
 
 # =============================================================================
@@ -142,7 +143,7 @@ def extract_feature_from_visitor_data(visitor_data: dict) -> Optional[np.ndarray
                 if feature_array.shape[0] == 128:
                     return feature_array.astype(np.float32)
             except Exception as e:
-                print(f"[WARNING] Error decoding features for {visitor_id}: {e}")
+                logger.warning(f"Error decoding features for {visitor_id}: {e}")
         
         # Extract from image
         base64_data = visitor_data.get(DB_IMAGE_COLUMN)
@@ -177,7 +178,7 @@ def extract_feature_from_visitor_data(visitor_data: dict) -> Optional[np.ndarray
         
         return feature
     except Exception as e:
-        print(f"[ERROR] Feature extraction failed for {visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')}: {e}")
+        logger.error(f"Feature extraction failed for {visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')}: {e}")
         return None
 
 
@@ -209,23 +210,23 @@ def init_database_connection() -> bool:
     
     if not DB_AVAILABLE:
         if USE_DATABASE:
-            print("[WARNING] Database module not available - using test_images")
+            logger.warning("Database module not available - using test_images")
         USE_DATABASE = False
         return False
     
     try:
         print("Connecting to database...")
         if database.test_connection():
-            print("[OK] Database connection successful")
+            logger.info("Database connection successful")
             database.init_connection_pool(min_conn=1, max_conn=5)
             USE_DATABASE = True
             return True
         else:
-            print("[WARNING] Database connection failed - using test_images")
+            logger.warning("Database connection failed - using test_images")
             USE_DATABASE = False
             return False
     except Exception as e:
-        print(f"[WARNING] Database error: {e} - using test_images")
+        logger.error(f"Database error: {e} - using test_images")
         USE_DATABASE = False
         return False
 
@@ -239,10 +240,10 @@ def init_hnsw_index() -> Optional[Any]:
         index_dir = os.environ.get("HNSW_INDEX_DIR", MODELS_PATH)
         max_elements = int(os.environ.get("HNSW_MAX_ELEMENTS", "100000"))
         manager = HNSWIndexManager(index_dir=index_dir, max_elements=max_elements)
-        print(f"[OK] HNSW index initialized (max_elements={max_elements})")
+        logger.info(f"HNSW index initialized (max_elements={max_elements})")
         return manager
     except Exception as e:
-        print(f"[WARNING] HNSW init error: {e}")
+        logger.warning(f"HNSW init error: {e}")
         return None
 
 
@@ -256,20 +257,20 @@ def load_visitors_from_database(manager: Optional[Any]) -> int:
             features_column=DB_FEATURES_COLUMN,
             limit=DB_VISITOR_LIMIT
         )
-        print(f"[OK] Found {len(visitors)} visitors in database")
+        logger.info(f"Found {len(visitors)} visitors in database")
         
         if manager and visitors:
-            print(f"Building HNSW index from {len(visitors)} visitors...")
+            logger.info(f"Building HNSW index from {len(visitors)} visitors...")
             count = manager.rebuild_from_database(
                 get_visitors_func=lambda: visitors,
                 extract_feature_func=extract_feature_from_visitor_data
             )
             if count > 0:
-                print(f"[OK] HNSW index built with {count} visitors")
+                logger.info(f"HNSW index built with {count} visitors")
             return count
         return len(visitors)
     except Exception as e:
-        print(f"[ERROR] Loading visitors: {e}")
+        logger.error(f"Loading visitors: {e}")
         return 0
 
 
@@ -278,7 +279,7 @@ def load_visitors_from_test_images(manager: Optional[Any]) -> int:
     if not os.path.isdir(VISITOR_IMAGES_DIR):
         return 0
     
-    print(f"Loading visitors from {VISITOR_IMAGES_DIR}")
+    logger.info(f"Loading visitors from {VISITOR_IMAGES_DIR}")
     batch_data = []
     
     for fname in os.listdir(VISITOR_IMAGES_DIR):
@@ -299,15 +300,15 @@ def load_visitors_from_test_images(manager: Optional[Any]) -> int:
                 if manager:
                     batch_data.append((visitor_name, feature, {"path": fpath}))
         except Exception as e:
-            print(f"[WARNING] Failed to process {fname}: {e}")
+            logger.warning(f"Failed to process {fname}: {e}")
     
-    print(f"[OK] Loaded {len(VISITOR_FEATURES)} visitors from test_images")
+    logger.info(f"Loaded {len(VISITOR_FEATURES)} visitors from test_images")
     
     if manager and batch_data:
         count = manager.add_visitors_batch(batch_data)
         if count > 0:
             manager.save()
-            print(f"[OK] HNSW index built with {count} test_images visitors")
+            logger.info(f"HNSW index built with {count} test_images visitors")
     
     return len(VISITOR_FEATURES)
 
@@ -325,9 +326,9 @@ def load_models():
     try:
         face_detector = inference.get_face_detector()
         face_recognizer = inference.get_face_recognizer()
-        print("[OK] Models loaded")
+        logger.info("Models loaded")
     except Exception as e:
-        print(f"[ERROR] Loading models: {e}")
+        logger.error(f"Loading models: {e}")
         face_detector = None
         face_recognizer = None
     
@@ -346,15 +347,15 @@ def load_models():
         try:
             count = hnsw_index_manager.ntotal
             if count > 0:
-                print(f"[OK] HNSW index already has {count} vectors - skipping database reload")
+                logger.info(f"HNSW index already has {count} vectors - skipping database reload")
                 index_has_data = True
         except Exception as e:
-            print(f"[DEBUG] Could not check index count: {e}")
+            logger.debug(f"Could not check index count: {e}")
     
     if USE_DATABASE and DB_AVAILABLE and not index_has_data:
-        print("[OK] Using database for visitor recognition")
+        logger.info("Using database for visitor recognition")
         if load_visitors_from_database(hnsw_index_manager) == 0:
-            print("[WARNING] No visitors loaded from database - falling back to test_images")
+            logger.warning("No visitors loaded from database - falling back to test_images")
             USE_DATABASE = False
     
     if not USE_DATABASE or not DB_AVAILABLE:
