@@ -6,6 +6,7 @@ Contains request/response models for all API endpoints.
 
 from .detection import (
     DetectRequest,
+    FaceDetection,
     DetectionResponse,
     FeatureExtractionRequest,
     FeatureExtractionResponse,
@@ -22,16 +23,19 @@ from .comparison import (
 from .common import (
     HealthResponse,
     ModelStatusResponse,
+    ModelInfo,
     ModelInfoResponse,
     HNSWStatusResponse,
     ValidateImageRequest,
     ValidateImageResponse,
     ErrorResponse,
+    WebSocketMessage,
 )
 
 __all__ = [
     # Detection
     "DetectRequest",
+    "FaceDetection",
     "DetectionResponse",
     "FeatureExtractionRequest",
     "FeatureExtractionResponse",
@@ -45,9 +49,11 @@ __all__ = [
     # Common
     "HealthResponse",
     "ModelStatusResponse",
+    "ModelInfo",
     "ModelInfoResponse",
     "HNSWStatusResponse",
     "ValidateImageRequest",
     "ValidateImageResponse",
     "ErrorResponse",
+    "WebSocketMessage",
 ]
