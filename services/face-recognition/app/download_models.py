@@ -10,6 +10,9 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from logger import get_logger
+logger = get_logger(__name__)
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -62,24 +65,24 @@ def download_file(url: str, filepath: str, model_name: str) -> bool:
     Returns:
         True if download successful, False otherwise
     """
-    print(f"Downloading {model_name} from {url}...")
+    logger.info(f"Downloading {model_name} from {url}...")
     
     try:
         request = urllib.request.Request(url, headers=REQUEST_HEADERS)
         with urllib.request.urlopen(request) as response:
             file_size = int(response.headers.get('Content-Length', 0))
             if file_size > 0:
-                print(f"File size: {_format_size(file_size)}")
+                logger.info(f"File size: {_format_size(file_size)}")
             
             with open(filepath, 'wb') as out_file:
                 out_file.write(response.read())
         
         downloaded_size = os.path.getsize(filepath)
-        print(f"Downloaded {model_name} to {filepath} ({_format_size(downloaded_size)})")
+        logger.info(f"Downloaded {model_name} to {filepath} ({_format_size(downloaded_size)})")
         return True
         
     except Exception as e:
-        print(f"Error downloading {model_name}: {e}")
+        logger.error(f"Error downloading {model_name}: {e}")
         if os.path.exists(filepath):
             os.remove(filepath)
         return False
@@ -97,14 +100,14 @@ def verify_file(filepath: str, expected_hash: Optional[str] = None) -> bool:
         True if file is valid, False otherwise
     """
     if not os.path.exists(filepath):
-        print(f"File {filepath} does not exist")
+        logger.error(f"File {filepath} does not exist")
         return False
     
     if expected_hash:
         with open(filepath, 'rb') as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
         if file_hash != expected_hash:
-            print(f"File {filepath} hash mismatch")
+            logger.error(f"File {filepath} hash mismatch")
             return False
     
     return True
@@ -122,7 +125,7 @@ def download_model(model_key: str, models_dir: str = MODELS_DIR) -> bool:
         True if model is available (downloaded or already exists), False otherwise
     """
     if model_key not in MODEL_INFO:
-        print(f"Unknown model: {model_key}")
+        logger.error(f"Unknown model: {model_key}")
         return False
     
     info = MODEL_INFO[model_key]
@@ -132,9 +135,9 @@ def download_model(model_key: str, models_dir: str = MODELS_DIR) -> bool:
     if os.path.exists(filepath):
         file_size = os.path.getsize(filepath)
         if file_size >= MIN_MODEL_SIZE_BYTES:
-            print(f"Model {model_key} already exists ({_format_size(file_size)})")
+            logger.info(f"Model {model_key} already exists ({_format_size(file_size)})")
             return True
-        print(f"Model {model_key} appears invalid ({file_size} bytes). Re-downloading...")
+        logger.warning(f"Model {model_key} appears invalid ({file_size} bytes). Re-downloading...")
         os.remove(filepath)
     
     # Download and verify
@@ -142,7 +145,7 @@ def download_model(model_key: str, models_dir: str = MODELS_DIR) -> bool:
         return False
     
     if not verify_file(filepath, info['hash']):
-        print(f"Failed to verify model {model_key}")
+        logger.error(f"Failed to verify model {model_key}")
         return False
     
     return True
@@ -155,15 +158,15 @@ def main() -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    print("Downloading models...")
+    logger.info("Downloading models...")
     os.makedirs(MODELS_DIR, exist_ok=True)
     
     success = True
     for model_key in MODEL_INFO:
         if download_model(model_key):
-            print(f"{model_key.upper()} model ready")
+            logger.info(f"{model_key.upper()} model ready")
         else:
-            print(f"Failed to download {model_key.upper()} model")
+            logger.error(f"Failed to download {model_key.upper()} model")
             success = False
     
     return 0 if success else 1

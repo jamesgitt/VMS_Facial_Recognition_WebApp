@@ -10,7 +10,9 @@ import pickle
 import traceback
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any, Callable
-from logger import logger
+
+from logger import get_logger
+logger = get_logger(__name__)
 
 import numpy as np
 

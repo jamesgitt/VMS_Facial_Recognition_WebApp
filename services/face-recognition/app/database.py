@@ -11,8 +11,9 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
-import logging
 import numpy as np
+
+from logger import get_logger
 
 # Load environment variables from .env file if it exists
 try:
@@ -26,7 +27,7 @@ try:
 except ImportError:
     pass
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Database configuration from environment variables
 DATABASE_URL = os.environ.get("DATABASE_URL")

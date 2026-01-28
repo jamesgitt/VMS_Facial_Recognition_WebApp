@@ -26,6 +26,9 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict
 
+from logger import get_logger
+logger = get_logger(__name__)
+
 import numpy as np
 from psycopg2.extras import RealDictCursor
 
@@ -41,11 +44,11 @@ try:
         _SCRIPT_DIR.parent.parent.parent / ".env.test",
     ]:
         if env_path.exists():
-            print(f"Loading environment from: {env_path}")
+            logger.info(f"Loading environment from: {env_path}")
             load_dotenv(env_path)
             break
     else:
-        print("Warning: No .env.test file found")
+        logger.warning("No .env.test file found")
 except ImportError:
     pass
 
@@ -55,8 +58,8 @@ try:
     import inference
     import image_loader
 except ImportError as e:
-    print(f"Error importing modules: {e}")
-    print("Make sure you're running from the app directory with all dependencies installed.")
+    logger.error(f"Error importing modules: {e}")
+    logger.error("Make sure you're running from the app directory with all dependencies installed.")
     sys.exit(1)
 
 # Constants
@@ -96,12 +99,12 @@ def extract_feature_from_image(base64_image: str) -> Optional[np.ndarray]:
         
         feature = np.asarray(feature).flatten().astype(np.float32)
         if feature.shape[0] != EXPECTED_FEATURE_DIM:
-            print(f"[WARNING] Feature dimension is {feature.shape[0]}, expected {EXPECTED_FEATURE_DIM}")
+            logger.warning(f"Feature dimension is {feature.shape[0]}, expected {EXPECTED_FEATURE_DIM}")
             return None
         
         return feature
     except Exception as e:
-        print(f"Error extracting feature: {e}")
+        logger.error(f"Error extracting feature: {e}")
         return None
 
 
@@ -137,7 +140,7 @@ def get_visitors_needing_features(skip_existing: bool = True) -> List[Dict]:
             return [dict(row) for row in cursor.fetchall()]
             
     except Exception as e:
-        print(f"Error querying database: {e}")
+        logger.error(f"Error querying database: {e}")
         return []
 
 
@@ -161,43 +164,43 @@ def save_feature_to_db(visitor_id: str, feature: np.ndarray) -> bool:
             features_column=DB_FEATURES_COLUMN
         )
     except Exception as e:
-        print(f"Error saving feature to database: {e}")
+        logger.error(f"Error saving feature to database: {e}")
         return False
 
 
-def print_header(title: str) -> None:
-    """Print a formatted header."""
-    print("=" * 60)
-    print(title)
-    print("=" * 60)
+def log_header(title: str) -> None:
+    """Log a formatted header."""
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
 
 
 def validate_environment() -> bool:
     """Validate that required environment and modules are available."""
     if not USE_DATABASE:
-        print("[ERROR] USE_DATABASE is not set to 'true'")
-        print("   Set USE_DATABASE=true in your .env file")
+        logger.error("USE_DATABASE is not set to 'true'")
+        logger.error("   Set USE_DATABASE=true in your .env file")
         return False
     
     if not hasattr(database, 'test_connection'):
-        print("[ERROR] Database module not properly loaded")
+        logger.error("Database module not properly loaded")
         return False
     
-    print("Testing database connection...")
+    logger.info("Testing database connection...")
     if not database.test_connection():
-        print("[ERROR] Database connection failed")
-        print("   Check your DATABASE_URL and database credentials")
+        logger.error("Database connection failed")
+        logger.error("   Check your DATABASE_URL and database credentials")
         return False
-    print("[OK] Database connection successful\n")
+    logger.info("Database connection successful")
     
-    print("Loading face detection and recognition models...")
+    logger.info("Loading face detection and recognition models...")
     try:
-        inference.get_face_detector(MODELS_PATH)
-        inference.get_face_recognizer(MODELS_PATH)
-        print("[OK] Models loaded successfully\n")
+        inference.get_face_detector()
+        inference.get_face_recognizer()
+        logger.info("Models loaded successfully")
     except Exception as e:
-        print(f"[ERROR] Failed to load models: {e}")
-        print(f"   Make sure models are in: {MODELS_PATH}")
+        logger.error(f"Failed to load models: {e}")
+        logger.error(f"   Make sure models are in: {MODELS_PATH}")
         return False
     
     return True
@@ -217,7 +220,7 @@ def process_visitors(visitors: List[Dict]) -> tuple:
     total = len(visitors)
     start_time = time.time()
     
-    print("-" * 60)
+    logger.info("-" * 60)
     
     for i, visitor_data in enumerate(visitors, 1):
         visitor_id = visitor_data.get(DB_VISITOR_ID_COLUMN, 'unknown')
@@ -231,7 +234,7 @@ def process_visitors(visitors: List[Dict]) -> tuple:
         
         if feature is None:
             failed += 1
-            print(f"[{i}/{total}] FAILED - visitor {visitor_id}")
+            logger.error(f"[{i}/{total}] FAILED - visitor {visitor_id}")
             continue
         
         if save_feature_to_db(visitor_id, feature):
@@ -240,33 +243,31 @@ def process_visitors(visitors: List[Dict]) -> tuple:
                 elapsed = time.time() - start_time
                 rate = i / elapsed if elapsed > 0 else 0
                 eta = (total - i) / rate if rate > 0 else 0
-                print(f"[{i}/{total}] [OK] visitor {visitor_id} "
+                logger.info(f"[{i}/{total}] [OK] visitor {visitor_id} "
                       f"(Success: {successful}, Failed: {failed}, Rate: {rate:.1f}/s, ETA: {eta:.0f}s)")
         else:
             failed += 1
-            print(f"[{i}/{total}] FAILED to save - visitor {visitor_id}")
+            logger.error(f"[{i}/{total}] FAILED to save - visitor {visitor_id}")
     
     return successful, failed, skipped
 
 
-def print_summary(total: int, successful: int, failed: int, skipped: int, elapsed: float) -> None:
-    """Print extraction summary."""
-    print()
-    print_header("Extraction Summary")
-    print(f"Total visitors processed: {total}")
-    print(f"Successful: {successful}")
-    print(f"Failed: {failed}")
-    print(f"Skipped: {skipped}")
-    print(f"Time elapsed: {elapsed:.1f} seconds")
+def log_summary(total: int, successful: int, failed: int, skipped: int, elapsed: float) -> None:
+    """Log extraction summary."""
+    log_header("Extraction Summary")
+    logger.info(f"Total visitors processed: {total}")
+    logger.info(f"Successful: {successful}")
+    logger.info(f"Failed: {failed}")
+    logger.info(f"Skipped: {skipped}")
+    logger.info(f"Time elapsed: {elapsed:.1f} seconds")
     if successful > 0 and elapsed > 0:
-        print(f"Average rate: {successful / elapsed:.2f} features/second")
-    print()
+        logger.info(f"Average rate: {successful / elapsed:.2f} features/second")
     
     if successful > 0:
-        print(f"[OK] Successfully extracted and stored features for {successful} visitors")
+        logger.info(f"Successfully extracted and stored features for {successful} visitors")
     if failed > 0:
-        print(f"[WARNING] Failed to extract features for {failed} visitors")
-        print("   Check logs above for error details")
+        logger.warning(f"Failed to extract features for {failed} visitors")
+        logger.warning("   Check logs above for error details")
 
 
 def main() -> int:
@@ -276,31 +277,30 @@ def main() -> int:
     Returns:
         Exit code (0 for success, 1 for failure)
     """
-    print_header("Face Features Extraction Script")
-    print()
+    log_header("Face Features Extraction Script")
     
     if not validate_environment():
         return 1
     
-    print(f"Querying visitors {'without features' if SKIP_EXISTING else 'with images'}...")
+    logger.info(f"Querying visitors {'without features' if SKIP_EXISTING else 'with images'}...")
     visitors = get_visitors_needing_features(skip_existing=SKIP_EXISTING)
     
     if not visitors:
-        print("[OK] No visitors need feature extraction")
+        logger.info("No visitors need feature extraction")
         if SKIP_EXISTING:
-            print("   All visitors already have features stored")
+            logger.info("All visitors already have features stored")
         else:
-            print("   No visitors found in database")
+            logger.warning("No visitors found in database")
         return 0
     
     total = len(visitors)
-    print(f"Found {total} visitors needing feature extraction\n")
+    logger.info(f"Found {total} visitors needing feature extraction")
     
     start_time = time.time()
     successful, failed, skipped = process_visitors(visitors)
     elapsed = time.time() - start_time
     
-    print_summary(total, successful, failed, skipped, elapsed)
+    log_summary(total, successful, failed, skipped, elapsed)
     
     return 0 if failed == 0 else 1
 
@@ -309,10 +309,10 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print("\n\n[WARNING] Extraction interrupted by user")
+        logger.warning("Extraction interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n[ERROR] Fatal error: {e}")
+        logger.error(f"Fatal error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

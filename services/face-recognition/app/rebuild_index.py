@@ -22,6 +22,9 @@ import base64
 from pathlib import Path
 from typing import Optional
 
+from logger import get_logger
+logger = get_logger(__name__)
+
 import numpy as np
 
 # Add the app directory to Python path
@@ -42,13 +45,13 @@ except ImportError:
 try:
     import database
 except ImportError:
-    print("[ERROR] database module not available")
+    logger.error("database module not available")
     sys.exit(1)
 
 try:
     from hnsw_index import HNSWIndexManager
 except ImportError:
-    print("[ERROR] HNSW index manager not available")
+    logger.error("HNSW index manager not available")
     sys.exit(1)
 
 import inference
@@ -71,7 +74,7 @@ def _get_models():
     """Get or initialize face detection/recognition models."""
     global _face_detector, _face_recognizer
     if _face_detector is None or _face_recognizer is None:
-        print("   Loading face detection and recognition models...")
+        logger.error("Loading face detection and recognition models...")
         _face_detector = inference.get_face_detector(MODELS_PATH)
         _face_recognizer = inference.get_face_recognizer(MODELS_PATH)
     return _face_detector, _face_recognizer
@@ -128,7 +131,7 @@ def _extract_from_image(visitor_data: dict) -> Optional[np.ndarray]:
         
         return feature
     except Exception as e:
-        print(f"   [WARNING] Failed to extract features from image: {e}")
+        logger.warning(f"Failed to extract features from image: {e}")
         return None
 
 
@@ -150,30 +153,30 @@ def extract_feature_from_visitor_data(visitor_data: dict) -> Optional[np.ndarray
     return _extract_from_image(visitor_data)
 
 
-def print_header(title: str) -> None:
-    """Print a formatted header."""
-    print("=" * 60)
-    print(title)
-    print("=" * 60)
+def log_header(title: str) -> None:
+    """Log a formatted header."""
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
 
 
 def check_database_connection() -> bool:
     """Check and initialize database connection."""
-    print("\n1. Checking database connection...")
+    logger.info("Checking database connection...")
     
     if not database.test_connection():
-        print("   [ERROR] Database connection failed")
+        logger.error("Database connection failed")
         return False
     
-    print("   [OK] Database connection successful")
+    logger.info("Database connection successful")
     database.init_connection_pool(min_conn=1, max_conn=5)
     return True
 
 
 def load_visitors() -> Optional[list]:
     """Load visitors from database (memory-optimized: only loads features, not images)."""
-    print("\n2. Loading visitors from database...")
-    print("   (Memory-optimized: loading only pre-computed features, skipping images)")
+    logger.info("Loading visitors from database...")
+    logger.info("Memory-optimized: loading only pre-computed features, skipping images")
     
     try:
         # Use optimized function that doesn't load images
@@ -183,11 +186,11 @@ def load_visitors() -> Optional[list]:
             features_column=DB_FEATURES_COLUMN,
             batch_size=5000
         )
-        print(f"   [OK] Found {len(visitors)} visitors with pre-computed features")
+        logger.info(f"Found {len(visitors)} visitors with pre-computed features")
         
         if not visitors:
-            print("   [WARNING] No visitors with features found.")
-            print("   [INFO] Falling back to loading images (this may use more memory)...")
+            logger.warning("No visitors with features found.")
+            logger.info("Falling back to loading images (this may use more memory)...")
             # Fallback to old method if no pre-computed features
             visitors = database.get_visitor_images_from_db(
                 table_name=DB_TABLE_NAME,
@@ -195,38 +198,38 @@ def load_visitors() -> Optional[list]:
                 image_column=DB_IMAGE_COLUMN,
                 features_column=DB_FEATURES_COLUMN
             )
-            print(f"   [OK] Found {len(visitors)} visitors (with images)")
+            logger.info(f"Found {len(visitors)} visitors (with images)")
         
         if not visitors:
-            print("   [WARNING] No visitors found. Index will be empty.")
+            logger.warning("No visitors found. Index will be empty.")
             return None
         
         return visitors
     except Exception as e:
-        print(f"   [ERROR] Error loading visitors: {e}")
+        logger.error(f"Error loading visitors: {e}")
         return None
 
 
 def initialize_index() -> Optional[HNSWIndexManager]:
     """Initialize HNSW index manager."""
-    print("\n3. Initializing HNSW index manager...")
+    logger.info("Initializing HNSW index manager...")
     
     try:
         manager = HNSWIndexManager(
             dimension=EXPECTED_FEATURE_DIM,
             index_dir=MODELS_PATH
         )
-        print("   [OK] HNSW index manager initialized")
+        logger.info("HNSW index manager initialized")
         return manager
     except Exception as e:
-        print(f"   [ERROR] Error initializing HNSW index manager: {e}")
+        logger.error(f"Error initializing HNSW index manager: {e}")
         return None
 
 
 def rebuild_index(manager: HNSWIndexManager, visitors: list) -> bool:
     """Rebuild HNSW index from visitors."""
-    print(f"\n4. Rebuilding HNSW index from {len(visitors)} visitors...")
-    print("   This may take a while...")
+    logger.info(f"Rebuilding HNSW index from {len(visitors)} visitors...")
+    logger.info("This may take a while...")
     
     try:
         count = manager.rebuild_from_database(
@@ -235,25 +238,25 @@ def rebuild_index(manager: HNSWIndexManager, visitors: list) -> bool:
         )
         
         if count == 0:
-            print("\n[ERROR] Index rebuild failed - no visitors were indexed")
+            logger.error("Index rebuild failed - no visitors were indexed")
             return False
         
-        print(f"\n[OK] HNSW index rebuilt with {count} visitors")
-        print(f"   Index files saved to: {Path(MODELS_PATH).absolute()}")
-        print("   - hnsw_visitor_index.bin")
-        print("   - hnsw_visitor_metadata.pkl")
+        logger.info(f"HNSW index rebuilt with {count} visitors")
+        logger.info(f"Index files saved to: {Path(MODELS_PATH).absolute()}")
+        logger.info("   - hnsw_visitor_index.bin")
+        logger.info("   - hnsw_visitor_metadata.pkl")
         
         # Display stats
         stats = manager.get_stats()
-        print("\nIndex Statistics:")
-        print(f"   Visitors indexed: {stats['visitors_indexed']}")
-        print(f"   Total vectors: {stats['total_vectors']}")
-        print(f"   HNSW Parameters: M={stats['m']}, ef_construction={stats['ef_construction']}, ef_search={stats['ef_search']}")
+        logger.info("Index Statistics:")
+        logger.info(f"   Visitors indexed: {stats['visitors_indexed']}")
+        logger.info(f"   Total vectors: {stats['total_vectors']}")
+        logger.info(f"   HNSW Parameters: M={stats['m']}, ef_construction={stats['ef_construction']}, ef_search={stats['ef_search']}")
         
         return True
         
     except Exception as e:
-        print(f"\n[ERROR] Error rebuilding index: {e}")
+        logger.error(f"Error rebuilding index: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -261,7 +264,7 @@ def rebuild_index(manager: HNSWIndexManager, visitors: list) -> bool:
 
 def main() -> int:
     """Main function to rebuild the HNSW index."""
-    print_header("HNSW Index Rebuild Script")
+    log_header("HNSW Index Rebuild Script")
     
     # Step 1: Check database
     if not check_database_connection():

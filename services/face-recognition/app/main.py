@@ -14,6 +14,9 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
+from logger import get_logger
+logger = get_logger("main")
+
 # Set up the script directory
 _SCRIPT_DIR = Path(__file__).parent.resolve()
 
@@ -23,7 +26,7 @@ try:
     for env_path in [_SCRIPT_DIR.parent / ".env", _SCRIPT_DIR / ".env"]:
         if env_path.exists():
             load_dotenv(env_path)
-            print(f"[OK] Loaded environment from {env_path}")
+            logger.info(f"Loaded environment from {env_path}")
             break
 except ImportError:
     pass
@@ -59,14 +62,14 @@ def check_models_exist(models_path: Optional[Path] = None) -> bool:
     sface_path = models_path / SFACE_FILENAME
 
     if not yunet_path.exists():
-        print(f"[ERROR] YuNet model not found at {yunet_path}")
+        logger.error(f"YuNet model not found at {yunet_path}")
         return False
 
     if not sface_path.exists():
-        print(f"[ERROR] SFace model not found at {sface_path}")
+        logger.error(f"SFace model not found at {sface_path}")
         return False
 
-    print(f"[OK] Models found in {models_path}")
+    logger.info(f"Models found in {models_path}")
     return True
 
 def download_models_if_needed(models_path: Path) -> bool:
@@ -77,7 +80,8 @@ def download_models_if_needed(models_path: Path) -> bool:
     if check_models_exist(models_path):
         return True
 
-    print("\nModels not found. Attempting to download...\n")
+    logger.warning("Models not found. Attempting to download...")
+
     downloader_variants = [
         ("download_models", "main"),
         ("app.download_models", "main"),
@@ -90,9 +94,8 @@ def download_models_if_needed(models_path: Path) -> bool:
         except ImportError:
             continue
 
-    print("[ERROR] Cannot import download_models module.")
-    print(f"\nTo download models manually, run:")
-    print(f"  python {_SCRIPT_DIR / 'download_models.py'}")
+    logger.error("Cannot import download_models module.")
+    logger.error(f"To download models manually, run:\n  python {_SCRIPT_DIR / 'download_models.py'}")
     return False
 
 def create_parser() -> argparse.ArgumentParser:
@@ -149,19 +152,19 @@ Examples:
 
 def print_startup_info(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
     """Print summary of server startup parameters."""
-    print("\n" + "=" * 60)
-    print("Face Recognition ML Microservice")
-    print("=" * 60)
-    print(f"Host:        {host}")
-    print(f"Port:        {port}")
-    print(f"Workers:     {workers}")
-    print(f"Reload:      {reload}")
-    print(f"Log Level:   {log_level}")
-    print("=" * 60)
-    print(f"\nAPI: http://{host}:{port}")
-    print(f"Docs: http://{host}:{port}/docs")
-    print(f"Health: http://{host}:{port}/api/v1/health")
-    print("\nPress Ctrl+C to stop\n")
+    logger.info("=" * 60)
+    logger.info("Face Recognition ML Microservice")
+    logger.info("=" * 60)
+    logger.info(f"Host:        {host}")
+    logger.info(f"Port:        {port}")
+    logger.info(f"Workers:     {workers}")
+    logger.info(f"Reload:      {reload}")
+    logger.info(f"Log Level:   {log_level}")
+    logger.info("=" * 60)
+    logger.info(f"API: http://{host}:{port}")
+    logger.info(f"Docs: http://{host}:{port}/docs")
+    logger.info(f"Health: http://{host}:{port}/api/v1/health")
+    logger.info("Press Ctrl+C to stop")
 
 def run_server(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
     """Start the uvicorn server with the desired settings."""
@@ -194,7 +197,7 @@ def main() -> int:
 
     # Check compatibility: reload mode with >1 worker is not supported
     if args.reload and args.workers > 1:
-        print("[WARNING] --reload not compatible with multiple workers. Using 1 worker.")
+        logger.warning("--reload not compatible with multiple workers. Using 1 worker.")
         args.workers = 1
 
     print_startup_info(args.host, args.port, args.workers, args.reload, args.log_level)
@@ -203,10 +206,10 @@ def main() -> int:
         run_server(args.host, args.port, args.workers, args.reload, args.log_level)
         return 0
     except KeyboardInterrupt:
-        print("\n\nShutting down server...")
+        logger.info("Shutting down server...")
         return 0
     except Exception as e:
-        print(f"\n[ERROR] Failed to start server: {e}")
+        logger.error(f"Failed to start server: {e}")
         return 1
 
 if __name__ == "__main__":

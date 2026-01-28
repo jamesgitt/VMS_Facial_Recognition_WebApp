@@ -89,6 +89,7 @@ tsconfig.tsbuildinfo*
 *.egg-info/
 dist/
 build/
+pyrefly.toml*
 
 # Database backups and dumps
 *.sql
@@ -104,6 +105,7 @@ apps/facial_recog_web_app/generated/
 # Example files (safe to commit)
 !.env.example
 !docker-compose.*.example
+
 # SSL Certificates
 certs/
 *.pem

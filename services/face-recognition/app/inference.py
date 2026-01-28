@@ -18,6 +18,10 @@ from typing import Optional, List, Tuple, Union
 import cv2
 import numpy as np
 
+from logger import get_logger
+logger = get_logger(__name__)
+
+
 # Configuration
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -127,7 +131,7 @@ def detect_faces(
     try:
         _, faces = detector.detect(resized)
     except Exception as e:
-        print(f"Detection error: {e}")
+        logger.error(f"Detection error: {e}")
         return None
 
     if faces is None or len(faces) == 0:
@@ -166,7 +170,7 @@ def extract_face_features(frame: np.ndarray, face_row: np.ndarray) -> Optional[n
         aligned = recognizer.alignCrop(frame, face_row)
         return recognizer.feature(aligned)
     except Exception as e:
-        print(f"Feature extraction error: {e}")
+        logger.error(f"Feature extraction error: {e}")
         return None
 
 
@@ -193,7 +197,7 @@ def compare_face_features(
         score = recognizer.match(feature1, feature2, cv2.FaceRecognizerSF_FR_COSINE)
         return float(score), score >= threshold
     except Exception as e:
-        print(f"Face comparison error: {e}")
+        logger.error(f"Face comparison error: {e}")
         return 0.0, False
 
 

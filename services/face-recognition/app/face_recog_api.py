@@ -24,7 +24,9 @@ import pickle
 import datetime
 from typing import List, Tuple, Optional, Any
 from pathlib import Path
-from logger import logger
+
+from logger import get_logger
+logger = get_logger(__name__)
 
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, WebSocket, WebSocketDisconnect
@@ -215,7 +217,7 @@ def init_database_connection() -> bool:
         return False
     
     try:
-        print("Connecting to database...")
+        logger.info("Connecting to database...")
         if database.test_connection():
             logger.info("Database connection successful")
             database.init_connection_pool(min_conn=1, max_conn=5)
@@ -596,7 +598,7 @@ async def recognize_visitor_api(
                     best_score = similarity
                     best_match = result
         except Exception as e:
-            print(f"[WARNING] HNSW search error: {e}")
+            logger.warning(f"HNSW search error: {e}")
     
     # Fallback: Linear search
     if not results:
@@ -647,7 +649,7 @@ async def recognize_visitor_api(
                         best_score = score
                         best_match = result
             except Exception as e:
-                print(f"[WARNING] Database query error: {e}")
+                logger.warning(f"Database query error: {e}")
         
         # Fallback: test_images
         if not results:
