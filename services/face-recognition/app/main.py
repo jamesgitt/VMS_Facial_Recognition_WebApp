@@ -8,19 +8,26 @@ Usage:
     python main.py --reload           # Run with auto-reload (development)
 """
 
-import os
 import sys
 import argparse
 from pathlib import Path
-from typing import Optional
+from contextlib import asynccontextmanager
 
-from logger import get_logger
-logger = get_logger("main")
-
-# Set up the script directory
+# Set up the script directory first
 _SCRIPT_DIR = Path(__file__).parent.resolve()
 
-# Load environment variables in priority order: ../.env, ./.env
+# Ensure script directory is in Python path
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+# Now import from core
+from core.logger import get_logger
+from core.config import settings
+from core.state import app_state
+
+logger = get_logger("main")
+
+# Load environment variables in priority order
 try:
     from dotenv import load_dotenv
     for env_path in [_SCRIPT_DIR.parent / ".env", _SCRIPT_DIR / ".env"]:
@@ -31,27 +38,126 @@ try:
 except ImportError:
     pass
 
-# Ensure script directory is in Python path
-if str(_SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPT_DIR))
-
 import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-# Import FastAPI app
-try:
-    from face_recog_api import app
-except ImportError:
-    from app.face_recog_api import app
+# Import API routers
+from api import api_router
 
-# Model file constants
+# Import initialization functions
+from pipelines.visitor_loader import initialize_all
+from ml import inference
+
+
+# =============================================================================
+# LIFESPAN CONTEXT MANAGER
+# =============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager.
+    
+    Handles startup and shutdown events.
+    """
+    # === STARTUP ===
+    logger.info("Starting Face Recognition API...")
+    
+    try:
+        # Load ML models
+        logger.info("Loading ML models...")
+        app_state.face_detector = inference.get_face_detector()
+        app_state.face_recognizer = inference.get_face_recognizer()
+        logger.info("ML models loaded successfully")
+        
+        # Initialize database, HNSW index, and load visitors
+        initialize_all()
+        
+        logger.info("Face Recognition API started successfully")
+        
+    except Exception as e:
+        logger.error(f"Startup failed: {e}")
+        raise
+    
+    yield  # Application runs here
+    
+    # === SHUTDOWN ===
+    logger.info("Shutting down Face Recognition API...")
+    
+    # Reset app state
+    app_state.reset()
+    
+    logger.info("Shutdown complete")
+
+
+# =============================================================================
+# CREATE FASTAPI APP
+# =============================================================================
+
+def create_app() -> FastAPI:
+    """
+    Create and configure the FastAPI application.
+    
+    Returns:
+        Configured FastAPI instance
+    """
+    app = FastAPI(
+        title=settings.api.title,
+        version=settings.api.version,
+        description=settings.api.description,
+        lifespan=lifespan,
+    )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors.origins,
+        allow_credentials=settings.cors.allow_credentials,
+        allow_methods=settings.cors.allow_methods,
+        allow_headers=settings.cors.allow_headers,
+    )
+    
+    # Include API routes
+    app.include_router(api_router)
+    
+    # Add exception handlers
+    @app.exception_handler(ValueError)
+    async def valueerror_handler(request, exc):
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(exc), "type": "ValueError"}
+        )
+    
+    @app.exception_handler(FileNotFoundError)
+    async def filenotfounderror_handler(request, exc):
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(exc), "type": "FileNotFoundError"}
+        )
+    
+    return app
+
+
+# Create the app instance
+app = create_app()
+
+
+# =============================================================================
+# MODEL CHECKING UTILITIES
+# =============================================================================
+
 YUNET_FILENAME = 'face_detection_yunet_2023mar.onnx'
 SFACE_FILENAME = 'face_recognition_sface_2021dec.onnx'
 
+
 def get_models_path() -> Path:
     """Return the path to the models directory."""
-    return Path(os.environ.get("MODELS_PATH", _SCRIPT_DIR / "models"))
+    return Path(settings.models.models_path)
 
-def check_models_exist(models_path: Optional[Path] = None) -> bool:
+
+def check_models_exist(models_path: Path = None) -> bool:
     """
     Return True if required ONNX model files exist, False otherwise.
     """
@@ -72,6 +178,7 @@ def check_models_exist(models_path: Optional[Path] = None) -> bool:
     logger.info(f"Models found in {models_path}")
     return True
 
+
 def download_models_if_needed(models_path: Path) -> bool:
     """
     Attempt to download models if they don't exist.
@@ -82,21 +189,19 @@ def download_models_if_needed(models_path: Path) -> bool:
 
     logger.warning("Models not found. Attempting to download...")
 
-    downloader_variants = [
-        ("download_models", "main"),
-        ("app.download_models", "main"),
-    ]
-    for module_name, func_name in downloader_variants:
-        try:
-            mod = __import__(module_name, fromlist=[func_name])
-            getattr(mod, func_name)()
-            return check_models_exist(models_path)
-        except ImportError:
-            continue
-
-    logger.error("Cannot import download_models module.")
-    logger.error(f"To download models manually, run:\n  python {_SCRIPT_DIR / 'download_models.py'}")
+    try:
+        from ml.download_models import main as download_main
+        download_main()
+        return check_models_exist(models_path)
+    except ImportError as e:
+        logger.error(f"Cannot import download_models module: {e}")
+    logger.error(f"To download models manually, run:\n  python {_SCRIPT_DIR / 'ml' / 'download_models.py'}")
     return False
+
+
+# =============================================================================
+# CLI
+# =============================================================================
 
 def create_parser() -> argparse.ArgumentParser:
     """Create CLI argument parser."""
@@ -115,14 +220,14 @@ Examples:
     parser.add_argument(
         "--host",
         type=str,
-        default=os.environ.get("API_HOST", "0.0.0.0"),
-        help="Host to bind to (default: API_HOST env or 0.0.0.0)",
+        default=settings.api.host,
+        help=f"Host to bind to (default: {settings.api.host})",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("API_PORT", "8000")),
-        help="Port to bind to (default: API_PORT env or 8000)",
+        default=settings.api.port,
+        help=f"Port to bind to (default: {settings.api.port})",
     )
     parser.add_argument(
         "--reload",
@@ -138,9 +243,9 @@ Examples:
     parser.add_argument(
         "--log-level",
         type=str,
-        default="info",
+        default=settings.logging.level.lower(),
         choices=["critical", "error", "warning", "info", "debug", "trace"],
-        help="Log level (default: info)",
+        help=f"Log level (default: {settings.logging.level.lower()})",
     )
     parser.add_argument(
         "--skip-model-check",
@@ -149,6 +254,7 @@ Examples:
     )
 
     return parser
+
 
 def print_startup_info(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
     """Print summary of server startup parameters."""
@@ -166,10 +272,11 @@ def print_startup_info(host: str, port: int, workers: int, reload: bool, log_lev
     logger.info(f"Health: http://{host}:{port}/api/v1/health")
     logger.info("Press Ctrl+C to stop")
 
+
 def run_server(host: str, port: int, workers: int, reload: bool, log_level: str) -> None:
     """Start the uvicorn server with the desired settings."""
-    config = uvicorn.Config(
-        app=app,
+    uvicorn.run(
+        "main:app",
         host=host,
         port=port,
         reload=reload,
@@ -177,8 +284,7 @@ def run_server(host: str, port: int, workers: int, reload: bool, log_level: str)
         log_level=log_level,
         access_log=True,
     )
-    server = uvicorn.Server(config)
-    server.run()
+
 
 def main() -> int:
     """
@@ -211,6 +317,7 @@ def main() -> int:
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
