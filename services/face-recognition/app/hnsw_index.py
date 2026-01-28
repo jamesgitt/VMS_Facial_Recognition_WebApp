@@ -10,6 +10,7 @@ import pickle
 import traceback
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any, Callable
+from logger import logger
 
 import numpy as np
 
@@ -19,7 +20,7 @@ try:
 except ImportError:
     HNSW_AVAILABLE = False
     hnswlib = None  # type: ignore[assignment]
-    print("Warning: HNSW not available. Install with: pip install hnswlib")
+    logger.warning("HNSW not available. Install with: pip install hnswlib")
 
 # Configuration
 INDEX_FILE = os.environ.get("HNSW_INDEX_FILE", "hnsw_visitor_index.bin")
@@ -111,11 +112,11 @@ class HNSWIndexManager:
                 self.visitor_id_to_index = data.get('visitor_id_to_index', {})
                 self.next_index = data.get('next_index', 0)
             
-            print(f"[OK] Loaded HNSW index with {self.index.get_current_count()} vectors")
+            logger.info(f"Loaded HNSW index with {self.index.get_current_count()} vectors")
             return True
             
         except Exception as e:
-            print(f"[WARNING] Error loading HNSW index: {e}. Creating new index.")
+            logger.warning(f"Error loading HNSW index: {e}. Creating new index.")
             self.index = self._create_index()
             return False
     
@@ -137,7 +138,7 @@ class HNSWIndexManager:
             
             return True
         except Exception as e:
-            print(f"[WARNING] Error saving HNSW index: {e}")
+            logger.warning(f"Error saving HNSW index: {e}")
             return False
     
     def _normalize_feature(self, feature: np.ndarray) -> np.ndarray:
@@ -160,7 +161,7 @@ class HNSWIndexManager:
             return False
         
         if visitor_id in self.visitor_id_to_index:
-            print(f"Visitor {visitor_id} already in index, skipping")
+            logger.info(f"Visitor {visitor_id} already in index, skipping")
             return False
         
         try:
@@ -173,7 +174,7 @@ class HNSWIndexManager:
             
             return True
         except Exception as e:
-            print(f"Error adding visitor to HNSW index: {e}")
+            logger.error(f"Error adding visitor to HNSW index: {e}")
             return False
     
     def add_visitors_batch(self, visitors: List[Tuple[str, np.ndarray, Optional[Dict]]]) -> int:
@@ -199,7 +200,7 @@ class HNSWIndexManager:
             
             feature = np.asarray(feature).flatten()
             if feature.shape[0] != self.dimension:
-                print(f"[WARNING] Skipping visitor {visitor_id}: dimension {feature.shape[0]} != {self.dimension}")
+                logger.warning(f"Skipping visitor {visitor_id}: dimension {feature.shape[0]} != {self.dimension}")
                 continue
             
             feature_norm = self._normalize_feature(feature)
@@ -216,24 +217,24 @@ class HNSWIndexManager:
             self.next_index += 1
         
         if not features_list:
-            print(f"[WARNING] No valid features to add (processed {len(visitors)} visitors)")
+            logger.warning(f"No valid features to add (processed {len(visitors)} visitors)")
             return 0
         
         try:
             features_array = np.vstack(features_list)
             indices_array = np.array(indices_list)
-            print(f"Adding {len(features_list)} features to HNSW index...")
+            logger.info(f"Adding {len(features_list)} features to HNSW index...")
             self.index.add_items(features_array, indices_array)
             
             for meta in pending_metadata:
                 idx = meta.pop('idx')
                 self.metadata[idx] = meta
             
-            print(f"[OK] Added {len(features_list)} visitors to HNSW index")
+            logger.info(f"Added {len(features_list)} visitors to HNSW index")
             return len(features_list)
             
         except Exception as e:
-            print(f"[WARNING] Error batch adding to HNSW index: {e}")
+            logger.warning(f"Error batch adding to HNSW index: {e}")
             traceback.print_exc()
             return 0
     
@@ -274,7 +275,7 @@ class HNSWIndexManager:
             return results
             
         except Exception as e:
-            print(f"Error searching HNSW index: {e}")
+            logger.error(f"Error searching HNSW index: {e}")
             return []
     
     def remove_visitor(self, visitor_id: str) -> bool:
@@ -288,7 +289,7 @@ class HNSWIndexManager:
             del self.visitor_id_to_index[visitor_id]
             return True
         except Exception as e:
-            print(f"Error removing visitor from HNSW index: {e}")
+            logger.error(f"Error removing visitor from HNSW index: {e}")
             return False
     
     def rebuild_from_database(
@@ -311,14 +312,14 @@ class HNSWIndexManager:
         try:
             visitors = get_visitors_func()
         except Exception as e:
-            print(f"[WARNING] Failed to get visitors from database: {e}")
+            logger.warning(f"Failed to get visitors from database: {e}")
             visitors = []
         
         if not visitors:
-            print("[WARNING] No visitors to index")
+            logger.warning("No visitors to index")
             return 0
         
-        print(f"Processing {len(visitors)} visitors for HNSW index...")
+        logger.info(f"Processing {len(visitors)} visitors for HNSW index...")
         batch_data = []
         success_count = 0
         fail_count = 0
@@ -347,19 +348,19 @@ class HNSWIndexManager:
             except Exception as e:
                 fail_count += 1
                 if fail_count <= 3:
-                    print(f"  [ERROR] Visitor {visitor_id}: {e}")
+                    logger.error(f"Visitor {visitor_id}: {e}")
         
-        print(f"Feature extraction: {success_count} successful, {fail_count} failed")
+        logger.info(f"Feature extraction: {success_count} successful, {fail_count} failed")
         
         if not batch_data:
-            print("[WARNING] No features extracted. Cannot build HNSW index.")
+            logger.warning("No features extracted. Cannot build HNSW index.")
             return 0
         
         count = self.add_visitors_batch(batch_data)
         
         if count > 0:
             self._save_index()
-            print(f"[OK] Rebuilt HNSW index with {count} visitors")
+            logger.info(f"Rebuilt HNSW index with {count} visitors")
         
         return count
     
