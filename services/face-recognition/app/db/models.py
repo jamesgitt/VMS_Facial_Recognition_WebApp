@@ -24,7 +24,6 @@ class VisitorBase(TypedDict, total=False):
     createdAt: Optional[datetime]
     updatedAt: Optional[datetime]
 
-
 class VisitorWithImage(VisitorBase):
     """Visitor record with image data."""
     base64Image: str  # Required for this type
