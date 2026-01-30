@@ -3,6 +3,7 @@ numpy>=1.26.0
 
 # Machine Learning & Feature Extraction
 opencv-python>=4.8.0
+onnxruntime>=1.16.0
 Pillow>=10.0.0
 
 # HNSW Approximate Nearest Neighbor Search
