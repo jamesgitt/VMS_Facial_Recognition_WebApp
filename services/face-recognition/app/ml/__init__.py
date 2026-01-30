@@ -3,7 +3,7 @@ Machine Learning Module
 
 Provides face detection, recognition, and indexing capabilities using:
 - YuNet: Face detection model
-- SFace: Face recognition/feature extraction model
+- SFace/ArcFace: Face recognition/feature extraction models (switchable)
 - HNSW: Approximate nearest neighbor search for fast matching
 
 Usage:
@@ -11,23 +11,23 @@ Usage:
         detect_faces,
         extract_face_features,
         compare_face_features,
-        get_face_detector,
-        get_face_recognizer,
+        get_recognizer,
+        get_index,
         HNSWIndexManager,
-        download_model,
     )
     
     # Face detection
     faces = detect_faces(image, return_landmarks=True)
     
-    # Feature extraction
-    features = extract_face_features(image, faces[0])
+    # Feature extraction (uses configured recognizer: SFace or ArcFace)
+    recognizer = get_recognizer()
+    features = recognizer.extract_features(image, faces[0])
     
     # Face comparison
-    similarity = compare_face_features(feature1, feature2)
+    score, is_match = recognizer.match(feature1, feature2)
     
-    # HNSW index for fast search
-    index = HNSWIndexManager()
+    # HNSW index for fast search (auto-matches recognizer)
+    index = get_index()
     index.add_visitor(visitor_id, features)
     matches = index.search(features, k=5)
 """
@@ -61,6 +61,20 @@ from .hnsw_index import (
     HNSW_AVAILABLE,
 )
 
+# Recognizer factory (SFace/ArcFace switching)
+from .recognizer_factory import (
+    get_recognizer,
+    reset_recognizer,
+)
+
+# Index factory (recognizer-aware HNSW)
+from .index_factory import (
+    get_index,
+    reset_index,
+    get_index_for_recognizer,
+    get_index_stats,
+)
+
 # Model download utility
 from .download_models import (
     download_model,
@@ -75,8 +89,15 @@ __all__ = [
     'get_face_landmarks',
     'get_face_detector',
     'get_face_recognizer',
+    # Recognizer factory
+    'get_recognizer',
+    'reset_recognizer',
     # HNSW index
     'HNSWIndexManager',
+    'get_index',
+    'reset_index',
+    'get_index_for_recognizer',
+    'get_index_stats',
     # Model download
     'download_model',
     # Constants - YuNet

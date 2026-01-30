@@ -23,8 +23,17 @@ from utils import image_loader
 from db import database
 
 
-# Constants
-FEATURE_DIMENSION = 128
+# Constants - FEATURE_DIMENSION is now dynamic based on recognizer
+# Use get_feature_dimension() for the actual value
+FEATURE_DIMENSION = 128  # Default for backward compatibility
+
+
+def get_feature_dimension() -> int:
+    """Get feature dimension from the active recognizer."""
+    try:
+        return inference.get_feature_dimension()
+    except Exception:
+        return FEATURE_DIMENSION
 
 
 @dataclass
@@ -115,8 +124,9 @@ def extract_single_feature(
         
         feature = np.asarray(feature).flatten().astype(np.float32)
         
-        if feature.shape[0] != FEATURE_DIMENSION:
-            logger.warning(f"Invalid feature dimension: {feature.shape[0]}")
+        expected_dim = get_feature_dimension()
+        if feature.shape[0] != expected_dim:
+            logger.warning(f"Invalid feature dimension: {feature.shape[0]} (expected {expected_dim})")
             return None
         
         return feature
@@ -196,24 +206,28 @@ def decode_feature_from_base64(base64_data: str) -> Optional[np.ndarray]:
         base64_data: Base64-encoded feature data
     
     Returns:
-        128-dim feature vector or None
+        Feature vector (128-dim or 512-dim) or None
     """
     if not base64_data:
         return None
+    
+    # Supported feature dimensions
+    SUPPORTED_DIMS = [128, 512]
     
     try:
         feature_bytes = base64.b64decode(base64_data)
         
         # Try raw float32 bytes first (most common)
-        if len(feature_bytes) == FEATURE_DIMENSION * 4:
-            feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
-            if feature_array.shape[0] == FEATURE_DIMENSION:
-                return feature_array.astype(np.float32)
+        for dim in SUPPORTED_DIMS:
+            if len(feature_bytes) == dim * 4:
+                feature_array = np.frombuffer(feature_bytes, dtype=np.float32)
+                if feature_array.shape[0] == dim:
+                    return feature_array.astype(np.float32)
         
         # Try pickle format
         try:
             feature_array = np.asarray(pickle.loads(feature_bytes)).flatten()
-            if feature_array.shape[0] == FEATURE_DIMENSION:
+            if feature_array.shape[0] in SUPPORTED_DIMS:
                 return feature_array.astype(np.float32)
         except Exception:
             pass
@@ -238,12 +252,13 @@ def encode_feature_to_base64(feature: np.ndarray) -> str:
     return base64.b64encode(feature_bytes).decode('utf-8')
 
 
-def validate_feature(feature: np.ndarray) -> bool:
+def validate_feature(feature: np.ndarray, expected_dim: int = None) -> bool:
     """
     Validate that a feature vector is valid.
     
     Args:
         feature: Feature vector to validate
+        expected_dim: Expected dimension (uses active recognizer if None)
     
     Returns:
         True if valid, False otherwise
@@ -256,7 +271,11 @@ def validate_feature(feature: np.ndarray) -> bool:
     
     feature = feature.flatten()
     
-    if feature.shape[0] != FEATURE_DIMENSION:
+    # Get expected dimension
+    if expected_dim is None:
+        expected_dim = get_feature_dimension()
+    
+    if feature.shape[0] != expected_dim:
         return False
     
     # Check for NaN or Inf
@@ -272,6 +291,7 @@ def validate_feature(feature: np.ndarray) -> bool:
 
 __all__ = [
     "FEATURE_DIMENSION",
+    "get_feature_dimension",
     "FeatureExtractionResult",
     "extract_features_from_image",
     "extract_single_feature",

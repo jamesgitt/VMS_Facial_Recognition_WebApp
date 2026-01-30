@@ -1,4 +1,5 @@
 """
+TO UPDATE:
 Centralized Configuration for Face Recognition API
 
 All configuration is loaded from environment variables with sensible defaults.
@@ -115,6 +116,12 @@ class ModelSettings(BaseSettings):
         description="YuNet maximum detections"
     )
     
+    # Recognizer selection
+    recognizer_type: str = Field(
+        default="sface",
+        description="Face recognizer type: 'sface' or 'arcface'"
+    )
+    
     # SFace (face recognition) settings
     sface_filename: str = Field(
         default="face_recognition_sface_2021dec.onnx",
@@ -131,6 +138,22 @@ class ModelSettings(BaseSettings):
         description="SFace feature vector dimension"
     )
     
+    # ArcFace (face recognition) settings
+    arcface_filename: str = Field(
+        default="arcface_r50.onnx",
+        description="ArcFace model filename"
+    )
+    arcface_similarity_threshold: float = Field(
+        default=0.45,
+        ge=0.0,
+        le=1.0,
+        description="ArcFace similarity threshold for matching"
+    )
+    arcface_feature_dim: int = Field(
+        default=512,
+        description="ArcFace feature vector dimension"
+    )
+    
     @property
     def yunet_path(self) -> str:
         """Full path to YuNet model."""
@@ -140,6 +163,26 @@ class ModelSettings(BaseSettings):
     def sface_path(self) -> str:
         """Full path to SFace model."""
         return os.path.join(self.models_path, self.sface_filename)
+    
+    @property
+    def arcface_path(self) -> str:
+        """Full path to ArcFace model."""
+        return os.path.join(self.models_path, self.arcface_filename)
+    
+    @property
+    def use_arcface(self) -> bool:
+        """Check if ArcFace is the selected recognizer."""
+        return self.recognizer_type.lower() == "arcface"
+    
+    @property
+    def active_feature_dim(self) -> int:
+        """Return feature dimension for active recognizer."""
+        return self.arcface_feature_dim if self.use_arcface else self.sface_feature_dim
+    
+    @property
+    def active_threshold(self) -> float:
+        """Return similarity threshold for active recognizer."""
+        return self.arcface_similarity_threshold if self.use_arcface else self.sface_similarity_threshold
 
 
 class DatabaseSettings(BaseSettings):

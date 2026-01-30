@@ -1,6 +1,11 @@
 """
 Model Download Script
-Downloads YuNet and SFace ONNX models for face detection and recognition.
+Downloads YuNet, SFace, and ArcFace ONNX models for face detection and recognition.
+
+Supports:
+- YuNet: Face detection
+- SFace: Face recognition (128-dim, fast)
+- ArcFace: Face recognition (512-dim, more accurate)
 """
 
 import os
@@ -33,14 +38,36 @@ MODEL_INFO = {
     'yunet': {
         'url': "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
         'filename': 'face_detection_yunet_2023mar.onnx',
-        'hash': None
+        'hash': None,
+        'required': True,
+        'description': 'Face detection model'
     },
     'sface': {
         'url': "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
         'filename': 'face_recognition_sface_2021dec.onnx',
-        'hash': None
-    }
+        'hash': None,
+        'required': True,
+        'description': 'Face recognition model (128-dim)'
+    },
+    # ArcFace models from InsightFace
+    'arcface_r50': {
+        'url': "https://huggingface.co/aarnphm/insightface-onnx/resolve/main/buffalo_l/w600k_r50.onnx",
+        'filename': 'arcface_r50.onnx',
+        'hash': None,
+        'required': False,
+        'description': 'ArcFace ResNet-50 (512-dim, recommended)'
+    },
+    'arcface_r100': {
+        'url': "https://huggingface.co/aarnphm/insightface-onnx/resolve/main/buffalo_l/w600k_mbf.onnx",
+        'filename': 'arcface_r100.onnx',
+        'hash': None,
+        'required': False,
+        'description': 'ArcFace MobileFaceNet (512-dim, faster)'
+    },
 }
+
+# ArcFace model aliases for easier access
+ARCFACE_MODELS = ['arcface_r50', 'arcface_r100']
 
 # HTTP headers to avoid 403 errors
 REQUEST_HEADERS = {
@@ -151,23 +178,115 @@ def download_model(model_key: str, models_dir: str = MODELS_DIR) -> bool:
     return True
 
 
+def download_required_models(models_dir: str = MODELS_DIR) -> bool:
+    """
+    Download only required models (YuNet and SFace).
+    
+    Args:
+        models_dir: Directory to save models
+    
+    Returns:
+        True if all required models are available
+    """
+    os.makedirs(models_dir, exist_ok=True)
+    
+    success = True
+    for model_key, info in MODEL_INFO.items():
+        if info.get('required', False):
+            if download_model(model_key, models_dir):
+                logger.info(f"{model_key.upper()} model ready")
+            else:
+                logger.error(f"Failed to download {model_key.upper()} model")
+                success = False
+    
+    return success
+
+
+def download_arcface(model_variant: str = 'arcface_r50', models_dir: str = MODELS_DIR) -> bool:
+    """
+    Download ArcFace model.
+    
+    Args:
+        model_variant: 'arcface_r50' or 'arcface_r100'
+        models_dir: Directory to save models
+    
+    Returns:
+        True if download successful
+    """
+    if model_variant not in ARCFACE_MODELS:
+        logger.error(f"Unknown ArcFace variant: {model_variant}. Use one of: {ARCFACE_MODELS}")
+        return False
+    
+    os.makedirs(models_dir, exist_ok=True)
+    return download_model(model_variant, models_dir)
+
+
+def list_models() -> None:
+    """Print available models and their status."""
+    print("\nAvailable models:")
+    print("-" * 60)
+    for model_key, info in MODEL_INFO.items():
+        filepath = os.path.join(MODELS_DIR, info['filename'])
+        status = "✓ Downloaded" if os.path.exists(filepath) else "✗ Not downloaded"
+        required = "(required)" if info.get('required', False) else "(optional)"
+        print(f"  {model_key:15} {required:12} {status}")
+        print(f"                   {info.get('description', '')}")
+    print()
+
+
 def main() -> int:
     """
-    Download all required models.
+    Download models based on command line arguments.
+    
+    Usage:
+        python download_models.py           # Download required models only
+        python download_models.py --all     # Download all models
+        python download_models.py --arcface # Download ArcFace (arcface_r50)
+        python download_models.py --list    # List available models
     
     Returns:
         Exit code (0 for success, 1 for failure)
     """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Download face recognition models')
+    parser.add_argument('--all', action='store_true', help='Download all models including ArcFace')
+    parser.add_argument('--arcface', action='store_true', help='Download ArcFace model (arcface_r50)')
+    parser.add_argument('--arcface-variant', choices=ARCFACE_MODELS, default='arcface_r50',
+                        help='ArcFace variant to download')
+    parser.add_argument('--list', action='store_true', help='List available models')
+    parser.add_argument('--models-dir', default=MODELS_DIR, help='Models directory')
+    
+    args = parser.parse_args()
+    
+    if args.list:
+        list_models()
+        return 0
+    
     logger.info("Downloading models...")
-    os.makedirs(MODELS_DIR, exist_ok=True)
+    os.makedirs(args.models_dir, exist_ok=True)
     
     success = True
-    for model_key in MODEL_INFO:
-        if download_model(model_key):
-            logger.info(f"{model_key.upper()} model ready")
-        else:
-            logger.error(f"Failed to download {model_key.upper()} model")
+    
+    # Always download required models
+    if not download_required_models(args.models_dir):
+        success = False
+    
+    # Download ArcFace if requested
+    if args.arcface or args.all:
+        if not download_arcface(args.arcface_variant, args.models_dir):
             success = False
+    
+    # Download all optional models if --all
+    if args.all:
+        for model_key in ARCFACE_MODELS:
+            if not download_model(model_key, args.models_dir):
+                logger.warning(f"Failed to download optional model: {model_key}")
+    
+    if success:
+        logger.info("All requested models downloaded successfully")
+    else:
+        logger.error("Some models failed to download")
     
     return 0 if success else 1
 

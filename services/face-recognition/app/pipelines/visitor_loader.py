@@ -181,7 +181,11 @@ def load_visitors_from_test_images(
                 continue
             
             feature = np.asarray(feature).flatten().astype(np.float32)
-            if feature.shape[0] != 128:
+            
+            # Validate feature dimension matches recognizer
+            expected_dim = inference.get_feature_dimension()
+            if feature.shape[0] != expected_dim:
+                logger.warning(f"Feature dimension mismatch for {fname}: {feature.shape[0]} != {expected_dim}")
                 continue
             
             visitor_name = os.path.splitext(fname)[0]
@@ -218,29 +222,32 @@ def load_visitors_from_test_images(
 
 def init_hnsw_index() -> Optional[Any]:
     """
-    Initialize HNSW index manager.
+    Initialize HNSW index manager for the active recognizer.
+    
+    Uses the index factory to get an index that matches the currently
+    configured recognizer (SFace or ArcFace).
     
     Returns:
         HNSWIndexManager instance or None
     """
     try:
-        from ml.hnsw_index import HNSWIndexManager
+        from ml.index_factory import get_index
+        from ml.recognizer_factory import get_recognizer
     except ImportError:
-        logger.warning("HNSW index not available")
+        logger.warning("HNSW index factory not available")
         return None
     
-    hnsw_config = settings.hnsw
-    
     try:
-        index_dir = hnsw_config.index_dir or settings.models.models_path
-        manager = HNSWIndexManager(
-            index_dir=index_dir,
-            max_elements=hnsw_config.max_elements,
-            m=hnsw_config.m,
-            ef_construction=hnsw_config.ef_construction,
-            ef_search=hnsw_config.ef_search,
+        # Get recognizer to log which one we're using
+        recognizer = get_recognizer()
+        
+        # Get index matching the recognizer
+        manager = get_index()
+        
+        logger.info(
+            f"HNSW index initialized for {recognizer.name} "
+            f"({recognizer.feature_dim}-dim, {manager.ntotal} vectors)"
         )
-        logger.info(f"HNSW index initialized (max_elements={hnsw_config.max_elements})")
         return manager
     except Exception as e:
         logger.warning(f"HNSW init error: {e}")

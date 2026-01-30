@@ -3,6 +3,8 @@ HNSW Index Manager for Fast Face Recognition
 
 Uses HNSW (Hierarchical Navigable Small World) approximate nearest neighbor search
 for efficient face feature matching using cosine similarity.
+
+Supports recognizer-specific index files for switching between SFace and ArcFace.
 """
 
 import os
@@ -24,9 +26,7 @@ except ImportError:
     hnswlib = None  # type: ignore[assignment]
     logger.warning("HNSW not available. Install with: pip install hnswlib")
 
-# Configuration
-INDEX_FILE = os.environ.get("HNSW_INDEX_FILE", "hnsw_visitor_index.bin")
-METADATA_FILE = os.environ.get("HNSW_METADATA_FILE", "hnsw_visitor_metadata.pkl")
+# Default configuration
 DEFAULT_DIMENSION = 128
 DEFAULT_M = 32
 DEFAULT_EF_CONSTRUCTION = 400
@@ -35,11 +35,17 @@ DEFAULT_MAX_ELEMENTS = int(os.environ.get("HNSW_MAX_ELEMENTS", "100000"))
 
 
 class HNSWIndexManager:
-    """Manages HNSW index for fast face recognition using cosine similarity."""
+    """
+    Manages HNSW index for fast face recognition using cosine similarity.
+    
+    Supports recognizer-specific index files, allowing separate indexes
+    for SFace (128-dim) and ArcFace (512-dim) to coexist.
+    """
     
     def __init__(
         self,
         dimension: int = DEFAULT_DIMENSION,
+        recognizer_name: str = "sface",
         m: int = DEFAULT_M,
         ef_construction: int = DEFAULT_EF_CONSTRUCTION,
         ef_search: int = DEFAULT_EF_SEARCH,
@@ -50,7 +56,8 @@ class HNSWIndexManager:
         Initialize HNSW index manager.
         
         Args:
-            dimension: Feature vector dimension (default: 128 for SFace)
+            dimension: Feature vector dimension (128 for SFace, 512 for ArcFace)
+            recognizer_name: Name of the recognizer (used for file naming)
             m: Number of bi-directional links (higher = better recall)
             ef_construction: Size of dynamic candidate list during construction
             ef_search: Number of nearest neighbors to explore during search
@@ -61,12 +68,17 @@ class HNSWIndexManager:
             raise ImportError("HNSW is not available. Install with: pip install hnswlib")
         
         self.dimension = dimension
+        self.recognizer_name = recognizer_name.lower()
         self.m = m
         self.ef_construction = ef_construction
         self.ef_search = ef_search
         self.max_elements = max_elements
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Recognizer-specific filenames
+        self._index_filename = f"hnsw_{self.recognizer_name}_{dimension}.bin"
+        self._metadata_filename = f"metadata_{self.recognizer_name}.pkl"
         
         self.index: Optional[Any] = None
         self.metadata: Dict[int, Dict] = {}
@@ -77,11 +89,11 @@ class HNSWIndexManager:
     
     @property
     def _index_path(self) -> Path:
-        return self.index_dir / INDEX_FILE
+        return self.index_dir / self._index_filename
     
     @property
     def _metadata_path(self) -> Path:
-        return self.index_dir / METADATA_FILE
+        return self.index_dir / self._metadata_filename
     
     def _create_index(self) -> Any:
         """Create a new HNSW index for cosine similarity."""
@@ -96,6 +108,10 @@ class HNSWIndexManager:
     def _load_index(self) -> bool:
         """Load index and metadata from disk."""
         if not (self._index_path.exists() and self._metadata_path.exists()):
+            logger.info(
+                f"No existing index for {self.recognizer_name} ({self.dimension}-dim), "
+                f"creating new index"
+            )
             self.index = self._create_index()
             return False
         
@@ -113,8 +129,22 @@ class HNSWIndexManager:
                 self.metadata = data.get('metadata', {})
                 self.visitor_id_to_index = data.get('visitor_id_to_index', {})
                 self.next_index = data.get('next_index', 0)
+                
+                # Verify recognizer matches
+                saved_recognizer = data.get('recognizer', 'unknown')
+                saved_dimension = data.get('dimension', self.dimension)
+                if saved_dimension != self.dimension:
+                    logger.warning(
+                        f"Index dimension mismatch: saved={saved_dimension}, "
+                        f"expected={self.dimension}. Recreating index."
+                    )
+                    self.index = self._create_index()
+                    return False
             
-            logger.info(f"Loaded HNSW index with {self.index.get_current_count()} vectors")
+            logger.info(
+                f"Loaded HNSW index for {self.recognizer_name}: "
+                f"{self.index.get_current_count()} vectors, {self.dimension}-dim"
+            )
             return True
             
         except Exception as e:
@@ -133,11 +163,17 @@ class HNSWIndexManager:
             data = {
                 'metadata': self.metadata,
                 'visitor_id_to_index': self.visitor_id_to_index,
-                'next_index': self.next_index
+                'next_index': self.next_index,
+                'recognizer': self.recognizer_name,
+                'dimension': self.dimension,
             }
             with open(self._metadata_path, 'wb') as f:
                 pickle.dump(data, f)
             
+            logger.info(
+                f"Saved HNSW index for {self.recognizer_name}: "
+                f"{self._index_path.name} ({len(self.visitor_id_to_index)} visitors)"
+            )
             return True
         except Exception as e:
             logger.warning(f"Error saving HNSW index: {e}")
@@ -371,6 +407,8 @@ class HNSWIndexManager:
         return {
             'total_vectors': self.index.get_current_count() if self.index else 0,
             'dimension': self.dimension,
+            'recognizer': self.recognizer_name,
+            'index_file': self._index_filename,
             'index_type': 'HNSW',
             'm': self.m,
             'ef_construction': self.ef_construction,
@@ -383,13 +421,32 @@ class HNSWIndexManager:
         return self._save_index()
     
     def clear(self) -> None:
-        """Clear the index."""
+        """Clear the index in memory (does not delete files)."""
         self.index = self._create_index()
         self.metadata = {}
         self.visitor_id_to_index = {}
         self.next_index = 0
+        logger.info(f"Cleared HNSW index for {self.recognizer_name} (in memory)")
+    
+    def clear_and_delete(self) -> None:
+        """Clear the index and delete files from disk."""
+        # Delete files if they exist
+        if self._index_path.exists():
+            self._index_path.unlink()
+            logger.info(f"Deleted index file: {self._index_path}")
+        if self._metadata_path.exists():
+            self._metadata_path.unlink()
+            logger.info(f"Deleted metadata file: {self._metadata_path}")
+        
+        # Clear in-memory state
+        self.clear()
     
     @property
     def ntotal(self) -> int:
         """Get total number of vectors in index (for compatibility)."""
         return self.index.get_current_count() if self.index else 0
+    
+    @property
+    def index_exists(self) -> bool:
+        """Check if index files exist on disk."""
+        return self._index_path.exists() and self._metadata_path.exists()

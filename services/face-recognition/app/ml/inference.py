@@ -1,12 +1,12 @@
 """
 Face Detection and Recognition Inference Utilities
 
-Loads and configures YuNet (face detection) and SFace (recognition) ONNX models.
-Designed as a reusable utility for API or web service integration.
+Provides face detection (YuNet) and recognition (SFace/ArcFace) capabilities.
+The recognizer is selected based on RECOGNIZER_TYPE configuration.
 
 Exports:
 - detect_faces: Face detection with YuNet
-- extract_face_features: Feature extraction with SFace (128-dim)
+- extract_face_features: Feature extraction with configured recognizer
 - compare_face_features: Cosine similarity comparison
 - draw_face_rectangles: Visualization utility
 - get_face_landmarks: Extract 5-point landmarks from detection
@@ -19,12 +19,18 @@ import cv2
 import numpy as np
 
 from core.logger import get_logger
+from core.config import settings
+
 logger = get_logger(__name__)
 
 
-# Configuration
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# YuNet constants (for backward compatibility)
 YUNET_FILENAME = 'face_detection_yunet_2023mar.onnx'
 SFACE_FILENAME = 'face_recognition_sface_2021dec.onnx'
 
@@ -38,10 +44,18 @@ SFACE_SIMILARITY_THRESHOLD = 0.55
 
 def _find_models_dir() -> str:
     """Find the models directory from environment or common locations."""
+    # First try settings
+    try:
+        return settings.models.models_path
+    except Exception:
+        pass
+    
+    # Fallback to environment
     env_path = os.environ.get("MODELS_PATH")
     if env_path:
         return env_path
     
+    # Search common paths
     search_paths = [
         os.path.join(_SCRIPT_DIR, 'models'),
         os.path.join(os.path.dirname(_SCRIPT_DIR), 'models'),
@@ -60,50 +74,53 @@ YUNET_PATH = os.path.join(DEFAULT_MODELS_DIR, YUNET_FILENAME)
 SFACE_PATH = os.path.join(DEFAULT_MODELS_DIR, SFACE_FILENAME)
 
 
-def _verify_model_file(path: str, model_name: str) -> None:
-    """Raise FileNotFoundError if model file is missing."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"{model_name} model not found at {path}")
+# =============================================================================
+# FACE DETECTOR (YuNet)
+# =============================================================================
+
+_detector = None
 
 
-def _load_models():
-    """Load and return detector and recognizer models."""
-    _verify_model_file(YUNET_PATH, "YuNet")
-    _verify_model_file(SFACE_PATH, "SFace")
+def _get_detector():
+    """Get or create the YuNet face detector."""
+    global _detector
+    
+    if _detector is not None:
+        return _detector
+    
+    yunet_path = settings.models.yunet_path if settings else YUNET_PATH
+    
+    if not os.path.exists(yunet_path):
+        raise FileNotFoundError(f"YuNet model not found at {yunet_path}")
     
     try:
-        det = cv2.FaceDetectorYN.create(
-            model=YUNET_PATH,
+        _detector = cv2.FaceDetectorYN.create(
+            model=yunet_path,
             config='',
             input_size=YUNET_INPUT_SIZE,
-            score_threshold=YUNET_SCORE_THRESHOLD,
-            nms_threshold=YUNET_NMS_THRESHOLD,
-            top_k=YUNET_TOP_K
+            score_threshold=settings.models.yunet_score_threshold if settings else YUNET_SCORE_THRESHOLD,
+            nms_threshold=settings.models.yunet_nms_threshold if settings else YUNET_NMS_THRESHOLD,
+            top_k=settings.models.yunet_top_k if settings else YUNET_TOP_K
         )
+        logger.info(f"YuNet detector loaded: {yunet_path}")
     except Exception as e:
         raise RuntimeError(f"Failed to initialize YuNet: {e}")
     
-    try:
-        rec = cv2.FaceRecognizerSF.create(
-            model=SFACE_PATH,
-            config='',
-            backend_id=cv2.dnn.DNN_BACKEND_DEFAULT,
-            target_id=cv2.dnn.DNN_TARGET_CPU
-        )
-    except Exception as e:
-        raise RuntimeError(f"Failed to initialize SFace: {e}")
-    
-    return det, rec
+    return _detector
 
 
-# Initialize models at module load
-detector, recognizer = _load_models()
+# Initialize detector on first use
+detector = property(lambda self: _get_detector())
 
+
+# =============================================================================
+# FACE DETECTION
+# =============================================================================
 
 def detect_faces(
     frame: np.ndarray,
     input_size: Tuple[int, int] = YUNET_INPUT_SIZE,
-    score_threshold: float = YUNET_SCORE_THRESHOLD,
+    score_threshold: float = None,
     nms_threshold: float = YUNET_NMS_THRESHOLD,
     return_landmarks: bool = False
 ) -> Optional[Union[np.ndarray, List[Tuple[int, int, int, int]]]]:
@@ -113,7 +130,7 @@ def detect_faces(
     Args:
         frame: Input BGR image
         input_size: Input size for detector
-        score_threshold: Detection confidence threshold
+        score_threshold: Detection confidence threshold (uses config default if None)
         nms_threshold: Non-max suppression threshold
         return_landmarks: If True, return full face data with landmarks
 
@@ -125,11 +142,17 @@ def detect_faces(
     if frame is None or not hasattr(frame, 'shape'):
         raise ValueError("Frame is None or invalid")
     
+    det = _get_detector()
+    
+    # Use config threshold if not specified
+    if score_threshold is None:
+        score_threshold = settings.models.yunet_score_threshold if settings else YUNET_SCORE_THRESHOLD
+    
     resized = cv2.resize(frame, input_size)
-    detector.setInputSize(input_size)
+    det.setInputSize(input_size)
 
     try:
-        _, faces = detector.detect(resized)
+        _, faces = det.detect(resized)
     except Exception as e:
         logger.error(f"Detection error: {e}")
         return None
@@ -152,23 +175,28 @@ def detect_faces(
     return [(int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])) for bbox in bboxes]
 
 
+# =============================================================================
+# FEATURE EXTRACTION (Uses Recognizer Factory)
+# =============================================================================
+
 def extract_face_features(frame: np.ndarray, face_row: np.ndarray) -> Optional[np.ndarray]:
     """
-    Extract 128-dim SFace feature vector from a detected face.
+    Extract face feature vector using the configured recognizer (SFace or ArcFace).
 
     Args:
         frame: Full BGR image
         face_row: Face detection row from YuNet [x, y, w, h, score, ...landmarks]
 
     Returns:
-        128-dim feature vector (float32) or None on failure
+        Feature vector (128-dim for SFace, 512-dim for ArcFace) or None on failure
     """
     if frame is None or face_row is None:
         raise ValueError("Input frame or face_row is missing")
     
     try:
-        aligned = recognizer.alignCrop(frame, face_row)
-        return recognizer.feature(aligned)
+        from .recognizer_factory import get_recognizer
+        recognizer = get_recognizer()
+        return recognizer.extract_features(frame, face_row)
     except Exception as e:
         logger.error(f"Feature extraction error: {e}")
         return None
@@ -177,15 +205,15 @@ def extract_face_features(frame: np.ndarray, face_row: np.ndarray) -> Optional[n
 def compare_face_features(
     feature1: np.ndarray,
     feature2: np.ndarray,
-    threshold: float = SFACE_SIMILARITY_THRESHOLD
+    threshold: float = None
 ) -> Tuple[float, bool]:
     """
     Compare two face features using cosine similarity.
 
     Args:
-        feature1: First 128-dim feature vector
-        feature2: Second 128-dim feature vector
-        threshold: Similarity threshold for match
+        feature1: First feature vector
+        feature2: Second feature vector
+        threshold: Similarity threshold for match (uses config default if None)
 
     Returns:
         Tuple of (similarity_score, is_match)
@@ -194,11 +222,38 @@ def compare_face_features(
         raise ValueError("Both features must be provided")
     
     try:
-        score = recognizer.match(feature1, feature2, cv2.FaceRecognizerSF_FR_COSINE)
-        return float(score), score >= threshold
+        from .recognizer_factory import get_recognizer
+        recognizer = get_recognizer()
+        
+        if threshold is None:
+            threshold = recognizer.default_threshold
+        
+        return recognizer.match(feature1, feature2, threshold)
     except Exception as e:
         logger.error(f"Face comparison error: {e}")
         return 0.0, False
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def get_feature_dimension() -> int:
+    """Get feature dimension of the active recognizer."""
+    from .recognizer_factory import get_recognizer
+    return get_recognizer().feature_dim
+
+
+def get_similarity_threshold() -> float:
+    """Get default similarity threshold of the active recognizer."""
+    from .recognizer_factory import get_recognizer
+    return get_recognizer().default_threshold
+
+
+def get_recognizer_name() -> str:
+    """Get name of the active recognizer."""
+    from .recognizer_factory import get_recognizer
+    return get_recognizer().name
 
 
 def draw_face_rectangles(
@@ -260,12 +315,17 @@ def get_face_landmarks(face_row: np.ndarray) -> np.ndarray:
 
 def get_face_detector():
     """Get the loaded YuNet face detector model."""
-    return detector
+    return _get_detector()
 
 
 def get_face_recognizer():
-    """Get the loaded SFace face recognizer model."""
-    return recognizer
+    """
+    Get the active face recognizer.
+    
+    Deprecated: Use get_recognizer() from recognizer_factory instead.
+    """
+    from .recognizer_factory import get_recognizer
+    return get_recognizer()
 
 
 __all__ = [
@@ -276,6 +336,9 @@ __all__ = [
     'get_face_landmarks',
     'get_face_detector',
     'get_face_recognizer',
+    'get_feature_dimension',
+    'get_similarity_threshold',
+    'get_recognizer_name',
     'YUNET_PATH',
     'SFACE_PATH',
     'YUNET_INPUT_SIZE',
