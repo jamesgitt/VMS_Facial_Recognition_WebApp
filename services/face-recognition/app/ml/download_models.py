@@ -49,25 +49,26 @@ MODEL_INFO = {
         'required': True,
         'description': 'Face recognition model (128-dim)'
     },
-    # ArcFace models from InsightFace
-    'arcface_r50': {
-        'url': "https://huggingface.co/aarnphm/insightface-onnx/resolve/main/buffalo_l/w600k_r50.onnx",
-        'filename': 'arcface_r50.onnx',
+    # ArcFace models
+    'arcface': {
+        'url': "https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx",
+        'filename': 'arcface.onnx',
         'hash': None,
         'required': False,
-        'description': 'ArcFace ResNet-50 (512-dim, recommended)'
+        'description': 'ArcFace (512-dim, 137MB, recommended)'
     },
-    'arcface_r100': {
-        'url': "https://huggingface.co/aarnphm/insightface-onnx/resolve/main/buffalo_l/w600k_mbf.onnx",
-        'filename': 'arcface_r100.onnx',
+    'arcface_resnet100': {
+        'url': "https://huggingface.co/onnxmodelzoo/arcfaceresnet100-8/resolve/main/arcfaceresnet100-8.onnx",
+        'filename': 'arcface_resnet100.onnx',
         'hash': None,
         'required': False,
-        'description': 'ArcFace MobileFaceNet (512-dim, faster)'
+        'description': 'ArcFace ResNet100 (512-dim, 249MB, highest accuracy)'
     },
 }
 
 # ArcFace model aliases for easier access
-ARCFACE_MODELS = ['arcface_r50', 'arcface_r100']
+ARCFACE_MODELS = ['arcface', 'arcface_resnet100']
+DEFAULT_ARCFACE = 'arcface'
 
 # HTTP headers to avoid 403 errors
 REQUEST_HEADERS = {
@@ -202,17 +203,20 @@ def download_required_models(models_dir: str = MODELS_DIR) -> bool:
     return success
 
 
-def download_arcface(model_variant: str = 'arcface_r50', models_dir: str = MODELS_DIR) -> bool:
+def download_arcface(model_variant: str = None, models_dir: str = MODELS_DIR) -> bool:
     """
     Download ArcFace model.
     
     Args:
-        model_variant: 'arcface_r50' or 'arcface_r100'
+        model_variant: 'arcface' or 'arcface_resnet100' (defaults to 'arcface')
         models_dir: Directory to save models
     
     Returns:
         True if download successful
     """
+    if model_variant is None:
+        model_variant = DEFAULT_ARCFACE
+    
     if model_variant not in ARCFACE_MODELS:
         logger.error(f"Unknown ArcFace variant: {model_variant}. Use one of: {ARCFACE_MODELS}")
         return False
@@ -251,9 +255,9 @@ def main() -> int:
     
     parser = argparse.ArgumentParser(description='Download face recognition models')
     parser.add_argument('--all', action='store_true', help='Download all models including ArcFace')
-    parser.add_argument('--arcface', action='store_true', help='Download ArcFace model (arcface_r50)')
-    parser.add_argument('--arcface-variant', choices=ARCFACE_MODELS, default='arcface_r50',
-                        help='ArcFace variant to download')
+    parser.add_argument('--arcface', action='store_true', help='Download ArcFace model')
+    parser.add_argument('--arcface-variant', choices=ARCFACE_MODELS, default=DEFAULT_ARCFACE,
+                        help=f'ArcFace variant to download (default: {DEFAULT_ARCFACE})')
     parser.add_argument('--list', action='store_true', help='List available models')
     parser.add_argument('--models-dir', default=MODELS_DIR, help='Models directory')
     

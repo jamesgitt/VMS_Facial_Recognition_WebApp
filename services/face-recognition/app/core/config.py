@@ -79,6 +79,13 @@ class CORSSettings(BaseSettings):
         return self.origins
 
 
+def _get_default_models_path() -> str:
+    """Get default models path relative to app directory."""
+    # This file is at app/core/config.py, so app is two levels up
+    app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(app_dir, "models")
+
+
 class ModelSettings(BaseSettings):
     """ML model configuration."""
     
@@ -86,7 +93,7 @@ class ModelSettings(BaseSettings):
     
     # Paths
     models_path: str = Field(
-        default="models",
+        default_factory=_get_default_models_path,
         description="Path to ONNX model files"
     )
     
@@ -140,7 +147,7 @@ class ModelSettings(BaseSettings):
     
     # ArcFace (face recognition) settings
     arcface_filename: str = Field(
-        default="arcface_r50.onnx",
+        default="arcface.onnx",
         description="ArcFace model filename"
     )
     arcface_similarity_threshold: float = Field(
