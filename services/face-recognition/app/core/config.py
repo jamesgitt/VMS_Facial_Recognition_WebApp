@@ -99,6 +99,22 @@ class ModelSettings(BaseSettings):
         description="Path to ONNX model files"
     )
     
+    @field_validator("models_path", mode="before")
+    @classmethod
+    def resolve_models_path(cls, v):
+        """Resolve relative paths relative to app directory."""
+        if v is None:
+            return _get_default_models_path()
+        
+        # If it's already an absolute path, return as-is
+        if os.path.isabs(v):
+            return os.path.abspath(v)
+        
+        # For relative paths, resolve relative to app directory
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        resolved = os.path.join(app_dir, v)
+        return os.path.abspath(resolved)
+    
     # YuNet (face detection) settings
     yunet_filename: str = Field(
         default="face_detection_yunet_2023mar.onnx",
