@@ -110,9 +110,23 @@ class ModelSettings(BaseSettings):
         if os.path.isabs(v):
             return os.path.abspath(v)
         
-        # For relative paths, resolve relative to app directory
+        # Normalize path separators
+        v_normalized = v.replace('\\', '/')
+        
+        # Get app directory (parent of config.py's parent)
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        resolved = os.path.join(app_dir, v)
+        
+        # If path already starts with "app/", resolve relative to parent of app_dir
+        if v_normalized.startswith('app/'):
+            parent_dir = os.path.dirname(app_dir)
+            resolved = os.path.join(parent_dir, v_normalized)
+        # If path is just "models", resolve relative to app directory
+        elif v_normalized == 'models' or v_normalized.startswith('models/'):
+            resolved = os.path.join(app_dir, v_normalized)
+        # Otherwise, resolve relative to app directory
+        else:
+            resolved = os.path.join(app_dir, v_normalized)
+        
         return os.path.abspath(resolved)
     
     # YuNet (face detection) settings
