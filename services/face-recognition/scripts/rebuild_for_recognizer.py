@@ -25,9 +25,11 @@ import time
 import argparse
 from pathlib import Path
 
-# Add app to path FIRST
-APP_DIR = Path(__file__).parent.parent / "app"
-sys.path.insert(0, str(APP_DIR))
+# Add parent directory to path so 'app' module can be imported
+SCRIPT_DIR = Path(__file__).parent
+APP_DIR = SCRIPT_DIR.parent / "app"
+PARENT_DIR = SCRIPT_DIR.parent  # services/face-recognition
+sys.path.insert(0, str(PARENT_DIR))
 
 # Parse args early to set env var BEFORE loading config
 def parse_args_early():
@@ -43,7 +45,8 @@ if early_recognizer:
 
 # Load environment BEFORE importing config
 from dotenv import load_dotenv
-load_dotenv(str(APP_DIR.parent / ".env"))
+load_dotenv(str(PARENT_DIR / ".env"))
+load_dotenv(str(PARENT_DIR / ".env.test"))
 
 import numpy as np
 
