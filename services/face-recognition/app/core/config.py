@@ -83,7 +83,9 @@ def _get_default_models_path() -> str:
     """Get default models path relative to app directory."""
     # This file is at app/core/config.py, so app is two levels up
     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(app_dir, "models")
+    models_path = os.path.join(app_dir, "models")
+    # Return absolute path to avoid issues when running from different directories
+    return os.path.abspath(models_path)
 
 
 class ModelSettings(BaseSettings):
@@ -164,17 +166,17 @@ class ModelSettings(BaseSettings):
     @property
     def yunet_path(self) -> str:
         """Full path to YuNet model."""
-        return os.path.join(self.models_path, self.yunet_filename)
+        return os.path.abspath(os.path.join(self.models_path, self.yunet_filename))
     
     @property
     def sface_path(self) -> str:
         """Full path to SFace model."""
-        return os.path.join(self.models_path, self.sface_filename)
+        return os.path.abspath(os.path.join(self.models_path, self.sface_filename))
     
     @property
     def arcface_path(self) -> str:
         """Full path to ArcFace model."""
-        return os.path.join(self.models_path, self.arcface_filename)
+        return os.path.abspath(os.path.join(self.models_path, self.arcface_filename))
     
     @property
     def use_arcface(self) -> bool:
