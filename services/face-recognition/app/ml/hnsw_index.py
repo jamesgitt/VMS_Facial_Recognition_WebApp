@@ -408,6 +408,7 @@ class HNSWIndexManager:
             'total_vectors': self.index.get_current_count() if self.index else 0,
             'dimension': self.dimension,
             'recognizer': self.recognizer_name,
+            'recognizer_name': self.recognizer_name,  # Alias for frontend
             'index_file': self._index_filename,
             'index_type': 'HNSW',
             'm': self.m,

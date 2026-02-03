@@ -22,6 +22,38 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # =============================================================================
+# ENV FILE DISCOVERY
+# =============================================================================
+
+def _find_env_file() -> Optional[str]:
+    """Find .env file in common locations."""
+    # This file is at app/core/config.py
+    config_dir = Path(__file__).parent  # app/core/
+    app_dir = config_dir.parent  # app/
+    service_dir = app_dir.parent  # services/face-recognition/
+    
+    # Check locations in order of priority
+    candidates = [
+        app_dir / ".env",
+        service_dir / ".env",
+        service_dir / ".env.test",
+        Path.cwd() / ".env",
+    ]
+    
+    for path in candidates:
+        if path.exists():
+            print(f"[CONFIG] Found env file: {path}")
+            return str(path)
+    
+    print(f"[CONFIG] No env file found. Checked: {[str(p) for p in candidates]}")
+    return None
+
+
+ENV_FILE_PATH = _find_env_file()
+print(f"[CONFIG] Using env file: {ENV_FILE_PATH}")
+
+
+# =============================================================================
 # SETTINGS CLASSES
 # =============================================================================
 
@@ -29,6 +61,8 @@ class APISettings(BaseSettings):
     """API server configuration."""
     
     model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
         env_prefix="API_",
         extra="ignore",
     )
@@ -47,7 +81,11 @@ class APISettings(BaseSettings):
 class CORSSettings(BaseSettings):
     """CORS configuration."""
     
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
     
     cors_origins: str = Field(
         default="*",
@@ -91,7 +129,11 @@ def _get_default_models_path() -> str:
 class ModelSettings(BaseSettings):
     """ML model configuration."""
     
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
     
     # Paths
     models_path: str = Field(
@@ -228,6 +270,8 @@ class DatabaseSettings(BaseSettings):
     """Database configuration."""
     
     model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
         env_prefix="DB_",
         extra="ignore",
     )
@@ -288,6 +332,8 @@ class HNSWSettings(BaseSettings):
     """HNSW index configuration."""
     
     model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
         env_prefix="HNSW_",
         extra="ignore",
     )
@@ -332,7 +378,11 @@ class HNSWSettings(BaseSettings):
 class ImageSettings(BaseSettings):
     """Image processing configuration."""
     
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
     
     max_width: int = Field(
         default=1920,
@@ -361,7 +411,11 @@ class ImageSettings(BaseSettings):
 class LoggingSettings(BaseSettings):
     """Logging configuration."""
     
-    model_config = SettingsConfigDict(extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
     
     log_level: str = Field(
         default="INFO",
@@ -391,7 +445,7 @@ class Settings(BaseSettings):
     """
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE_PATH,
         env_file_encoding="utf-8",
         extra="ignore",
     )

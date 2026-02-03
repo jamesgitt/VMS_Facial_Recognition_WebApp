@@ -19,12 +19,27 @@ class HealthResponse(BaseModel):
     time: str = Field(
         description="Current server time (ISO 8601 format)"
     )
+    recognizer: Optional[str] = Field(
+        default=None,
+        description="Active face recognizer name (SFace or ArcFace)"
+    )
+    feature_dim: Optional[int] = Field(
+        default=None,
+        description="Feature vector dimension"
+    )
+    index_size: Optional[int] = Field(
+        default=None,
+        description="Number of visitors in HNSW index"
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
                 "status": "ok",
-                "time": "2024-01-15T10:30:00Z"
+                "time": "2024-01-15T10:30:00Z",
+                "recognizer": "ArcFace",
+                "feature_dim": 512,
+                "index_size": 72000
             }
         }
 
@@ -112,6 +127,10 @@ class HNSWStatusResponse(BaseModel):
     dimension: int = Field(
         default=128,
         description="Feature vector dimension"
+    )
+    recognizer_name: str = Field(
+        default="SFace",
+        description="Name of the face recognizer (SFace or ArcFace)"
     )
     index_type: str = Field(
         default="HNSW",

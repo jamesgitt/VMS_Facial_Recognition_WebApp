@@ -67,8 +67,8 @@ class ArcFaceRecognizer(FaceRecognizerBase):
         """Preprocess aligned face for ArcFace input."""
         face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
         face = (face.astype(np.float32) - 127.5) / 127.5
-        face = np.transpose(face, (2, 0, 1))
-        face = np.expand_dims(face, axis=0)
+        face = np.expand_dims(face, axis=0)  # Add batch dimension: (1, 112, 112, 3)
+        # Note: This model expects NHWC format, not NCHW
         return face
     
     def extract_features(self, image: np.ndarray, face_row: np.ndarray) -> np.ndarray:

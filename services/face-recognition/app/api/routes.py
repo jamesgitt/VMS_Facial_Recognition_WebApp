@@ -61,10 +61,32 @@ router = APIRouter()
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
 @router.get("/api/v1/health", response_model=HealthResponse, tags=["Health"])
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint with recognizer and index info."""
+    from ml.recognizer_factory import get_recognizer
+    
+    # Get recognizer info
+    try:
+        recognizer = get_recognizer()
+        recognizer_name = recognizer.name
+        feature_dim = recognizer.feature_dim
+    except Exception:
+        recognizer_name = None
+        feature_dim = None
+    
+    # Get index size
+    index_size = None
+    if app_state.hnsw_manager:
+        try:
+            index_size = app_state.hnsw_manager.ntotal
+        except Exception:
+            pass
+    
     return HealthResponse(
         status="ok",
-        time=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        time=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        recognizer=recognizer_name,
+        feature_dim=feature_dim,
+        index_size=index_size
     )
 
 
@@ -437,20 +459,55 @@ async def model_info():
 
 
 # =============================================================================
+# DEBUG TEST ENDPOINT
+# =============================================================================
+
+@router.get("/api/v1/test-code-version")
+async def test_code_version():
+    """Test if code changes are loaded."""
+    from ml.recognizer_factory import get_recognizer
+    try:
+        rec = get_recognizer()
+        return {"code_version": "v3", "recognizer": rec.name, "dim": rec.feature_dim}
+    except Exception as e:
+        return {"code_version": "v3", "error": str(e)}
+
+
+# =============================================================================
 # HNSW INDEX ENDPOINTS
 # =============================================================================
 
 @router.get("/api/v1/hnsw/status", response_model=HNSWStatusResponse, tags=["HNSW"])
 async def hnsw_status():
     """Get HNSW index status and statistics."""
-    hnsw_manager = app_state.hnsw_manager
+    from ml.recognizer_factory import get_recognizer
+    from ml.index_factory import get_index
+    
+    # Use index factory directly instead of app_state
+    try:
+        hnsw_manager = get_index()
+    except Exception as e:
+        logger.error(f"Failed to get index: {e}")
+        hnsw_manager = app_state.hnsw_manager
+    
+    # Get current recognizer info
+    try:
+        recognizer = get_recognizer()
+        recognizer_name = recognizer.name
+        recognizer_dim = recognizer.feature_dim
+        logger.info(f"HNSW status: recognizer={recognizer_name}, dim={recognizer_dim}")
+    except Exception as e:
+        logger.error(f"Failed to get recognizer: {e}")
+        recognizer_name = "Unknown"
+        recognizer_dim = 128
     
     if hnsw_manager is None:
         return HNSWStatusResponse(
             available=False,
             initialized=False,
             total_vectors=0,
-            dimension=128,
+            dimension=recognizer_dim,
+            recognizer_name=recognizer_name,
             index_type="HNSW",
             visitors_indexed=0,
             details={"error": "HNSW not initialized"}
@@ -458,24 +515,34 @@ async def hnsw_status():
     
     try:
         stats = hnsw_manager.get_stats()
+        # Add debug info to details
+        debug_info = {
+            **stats,
+            '_debug_recognizer': recognizer_name,
+            '_debug_dim': recognizer_dim,
+            '_debug_manager_dim': hnsw_manager.dimension if hnsw_manager else None,
+            '_code_version': 'v2'  # Marker to confirm this code is running
+        }
         return HNSWStatusResponse(
             available=True,
             initialized=True,
             total_vectors=stats.get('total_vectors', 0),
-            dimension=stats.get('dimension', 128),
+            dimension=stats.get('dimension', recognizer_dim),
+            recognizer_name=stats.get('recognizer_name', recognizer_name),
             index_type=stats.get('index_type', 'HNSW'),
             m=stats.get('m'),
             ef_construction=stats.get('ef_construction'),
             ef_search=stats.get('ef_search'),
             visitors_indexed=stats.get('visitors_indexed', 0),
-            details=stats
+            details=debug_info
         )
     except Exception as e:
         return HNSWStatusResponse(
             available=True,
             initialized=False,
             total_vectors=0,
-            dimension=128,
+            dimension=recognizer_dim,
+            recognizer_name=recognizer_name,
             index_type="HNSW",
             visitors_indexed=0,
             details={"error": str(e)}
