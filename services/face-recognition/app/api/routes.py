@@ -468,9 +468,9 @@ async def test_code_version():
     from ml.recognizer_factory import get_recognizer
     try:
         rec = get_recognizer()
-        return {"code_version": "v3", "recognizer": rec.name, "dim": rec.feature_dim}
+        return {"code_version": "v4", "recognizer": rec.name, "dim": rec.feature_dim}
     except Exception as e:
-        return {"code_version": "v3", "error": str(e)}
+        return {"code_version": "v4", "error": str(e)}
 
 
 # =============================================================================
