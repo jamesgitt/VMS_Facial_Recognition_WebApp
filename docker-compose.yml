@@ -14,8 +14,6 @@ services:
       - "8000:8000"  # HTTP port
     volumes:
       - ./services/face-recognition/app/models:/app/app/models:ro
-      - ./services/face-recognition/test_images:/app/app/test_images:ro
-      # Removed SSL certificate mount for HTTP only
     environment:
       - PYTHONUNBUFFERED=1
       - CORS_ORIGINS=${CORS_ORIGINS:-*}

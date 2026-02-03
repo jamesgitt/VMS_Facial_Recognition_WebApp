@@ -78,6 +78,36 @@ class APISettings(BaseSettings):
     debug: bool = Field(default=False, description="Enable debug mode")
 
 
+class AuthSettings(BaseSettings):
+    """Authentication configuration."""
+    
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILE_PATH,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+    
+    api_key: Optional[str] = Field(
+        default=None,
+        alias="API_KEY",
+        description="API key for authentication (if None, auth is disabled)"
+    )
+    api_key_header: str = Field(
+        default="X-API-Key",
+        description="Header name for API key"
+    )
+    auth_enabled: bool = Field(
+        default=True,
+        alias="AUTH_ENABLED",
+        description="Enable/disable API key authentication"
+    )
+    
+    @property
+    def is_enabled(self) -> bool:
+        """Check if authentication is enabled and configured."""
+        return self.auth_enabled and self.api_key is not None and len(self.api_key) > 0
+
+
 class CORSSettings(BaseSettings):
     """CORS configuration."""
     
@@ -452,6 +482,7 @@ class Settings(BaseSettings):
     
     # Sub-settings
     api: APISettings = Field(default_factory=APISettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     cors: CORSSettings = Field(default_factory=CORSSettings)
     models: ModelSettings = Field(default_factory=ModelSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -556,6 +587,7 @@ __all__ = [
     "get_settings",
     "Settings",
     "APISettings",
+    "AuthSettings",
     "CORSSettings",
     "ModelSettings",
     "DatabaseSettings",

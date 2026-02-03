@@ -5,13 +5,21 @@ FastAPI dependency injection for routes.
 """
 
 from typing import Optional
-from fastapi import Depends, HTTPException, UploadFile, File, Form
+from fastapi import Depends, HTTPException, UploadFile, File, Form, Header, Security
+from fastapi.security import APIKeyHeader
 
 from core.config import settings, Settings
 from core.state import app_state, AppState
 from core.logger import get_logger
 
 logger = get_logger(__name__)
+
+# API Key security scheme
+api_key_header = APIKeyHeader(
+    name=settings.auth.api_key_header,
+    auto_error=False,
+    description="API key for authentication"
+)
 
 
 def get_settings() -> Settings:
@@ -79,6 +87,60 @@ def get_threshold(
     return threshold or settings.models.sface_similarity_threshold
 
 
+async def verify_api_key(
+    api_key: Optional[str] = Security(api_key_header),
+) -> Optional[str]:
+    """
+    Verify API key authentication.
+    
+    If authentication is disabled (no API_KEY set), allows all requests.
+    If enabled, validates the provided API key.
+    
+    Returns:
+        The API key if valid, None if auth is disabled
+    
+    Raises:
+        HTTPException: 401 if API key is missing or invalid
+    """
+    # If auth is not enabled, allow all requests
+    if not settings.auth.is_enabled:
+        return None
+    
+    # Auth is enabled, API key is required
+    if api_key is None:
+        logger.warning("API request without API key")
+        raise HTTPException(
+            status_code=401,
+            detail="API key required",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    
+    # Validate API key
+    if api_key != settings.auth.api_key:
+        logger.warning("API request with invalid API key")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    
+    return api_key
+
+
+def require_api_key(
+    api_key: Optional[str] = Depends(verify_api_key),
+) -> Optional[str]:
+    """
+    Dependency to require API key for a route.
+    
+    Usage:
+        @router.post("/protected", dependencies=[Depends(require_api_key)])
+        async def protected_endpoint():
+            ...
+    """
+    return api_key
+
+
 __all__ = [
     "get_settings",
     "get_state",
@@ -86,4 +148,7 @@ __all__ = [
     "require_initialized",
     "get_image_input",
     "get_threshold",
+    "verify_api_key",
+    "require_api_key",
+    "api_key_header",
 ]

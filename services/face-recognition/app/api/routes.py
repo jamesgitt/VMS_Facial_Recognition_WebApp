@@ -8,12 +8,13 @@ import io
 import base64
 import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from PIL import Image
 
 from core.logger import get_logger
 from core.config import settings
 from core.state import app_state
+from api.deps import verify_api_key
 
 from schemas import (
     # Detection
@@ -95,7 +96,7 @@ async def health():
 # =============================================================================
 
 @router.post("/api/v1/detect", response_model=DetectionResponse, tags=["Detection"])
-async def detect_faces_api(request: DetectRequest):
+async def detect_faces_api(request: DetectRequest, _: str = Depends(verify_api_key)):
     """
     Detect faces in an image.
     
@@ -134,7 +135,7 @@ async def detect_faces_api(request: DetectRequest):
 
 
 @router.post("/api/v1/detect-structured", tags=["Detection"])
-async def detect_faces_structured_api(request: DetectRequest):
+async def detect_faces_structured_api(request: DetectRequest, _: str = Depends(verify_api_key)):
     """
     Detect faces in an image with structured response.
     
@@ -185,6 +186,7 @@ async def detect_faces_structured_api(request: DetectRequest):
 async def extract_features_api(
     image: UploadFile = File(None),
     image_base64: str = Form(None),
+    _: str = Depends(verify_api_key),
 ):
     """
     Extract face feature vectors from an image.
@@ -234,7 +236,7 @@ async def extract_features_api(
 
 
 @router.post("/api/v1/extract-features-json", response_model=FeatureExtractionResponse, tags=["Features"])
-async def extract_features_json_api(request: FeatureExtractionRequest):
+async def extract_features_json_api(request: FeatureExtractionRequest, _: str = Depends(verify_api_key)):
     """
     Extract face feature vectors from an image (JSON body).
     
@@ -278,7 +280,7 @@ async def extract_features_json_api(request: FeatureExtractionRequest):
 # =============================================================================
 
 @router.post("/api/v1/compare", response_model=CompareResponse, tags=["Recognition"])
-async def compare_faces_api(request: CompareRequest):
+async def compare_faces_api(request: CompareRequest, _: str = Depends(verify_api_key)):
     """
     Compare faces between two images.
     
@@ -318,6 +320,7 @@ async def recognize_visitor_api(
     image: UploadFile = File(None),
     image_base64: str = Form(None),
     threshold: float = Form(None),
+    _: str = Depends(verify_api_key),
 ):
     """
     Recognize a visitor by matching against the database.
@@ -372,7 +375,7 @@ async def recognize_visitor_api(
 
 
 @router.post("/api/v1/recognize-json", response_model=VisitorRecognitionResponse, tags=["Recognition"])
-async def recognize_visitor_json_api(request: RecognizeRequest):
+async def recognize_visitor_json_api(request: RecognizeRequest, _: str = Depends(verify_api_key)):
     """
     Recognize a visitor by matching against the database (JSON body).
     
@@ -584,6 +587,7 @@ def _validate_image_data(image_data: bytes) -> ValidateImageResponse:
 async def validate_image_api(
     image: UploadFile = File(None),
     image_base64: str = Form(None),
+    _: str = Depends(verify_api_key),
 ):
     """
     Validate an image before processing (multipart form).
@@ -607,7 +611,7 @@ async def validate_image_api(
 
 
 @router.post("/api/v1/validate-image", response_model=ValidateImageResponse, tags=["Utility"])
-async def validate_image_json_api(request: ValidateImageRequest):
+async def validate_image_json_api(request: ValidateImageRequest, _: str = Depends(verify_api_key)):
     """
     Validate an image before processing (JSON body).
     
