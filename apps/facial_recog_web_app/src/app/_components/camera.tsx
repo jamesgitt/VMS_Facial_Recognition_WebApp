@@ -256,6 +256,7 @@ export function FaceRecognitionCamera() {
         const response = await fetch(`${apiUrl}/api/v1/detect`, {
           method: "POST",
           headers: {
+            "X-API-Key": env.NEXT_PUBLIC_API_KEY ?? "",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -290,6 +291,7 @@ export function FaceRecognitionCamera() {
         const response = await fetch(`${apiUrl}/api/v1/compare`, {
           method: "POST",
           headers: {
+            "X-API-Key": env.NEXT_PUBLIC_API_KEY ?? "",
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -321,9 +323,13 @@ export function FaceRecognitionCamera() {
         formData.append("image_base64", imageBase64);
         formData.append("threshold", recognitionThreshold.toString());
 
+        // Attach API KEY as header to recognize endpoint as well
         const response = await fetch(`${apiUrl}/api/v1/recognize`, {
           method: "POST",
           body: formData,
+          headers: {
+            "X-API-Key": env.NEXT_PUBLIC_API_KEY ?? "",
+          },
         });
 
         if (!response.ok) {
