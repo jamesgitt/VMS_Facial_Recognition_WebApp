@@ -1,9 +1,13 @@
 """
-TO UPDATE:
 Centralized Configuration for Face Recognition API
 
 All configuration is loaded from environment variables with sensible defaults.
 Uses Pydantic Settings for validation and type coercion.
+
+Env file priority:
+    1. .env.prod (production)
+    2. .env (default)
+    3. .env.test (testing)
 
 Usage:
     from core.config import settings
@@ -26,18 +30,31 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # =============================================================================
 
 def _find_env_file() -> Optional[str]:
-    """Find .env file in common locations."""
+    """Find .env file in common locations.
+    
+    Priority order:
+    1. .env.prod (production)
+    2. .env (default)
+    3. .env.test (testing)
+    """
     # This file is at app/core/config.py
     config_dir = Path(__file__).parent  # app/core/
     app_dir = config_dir.parent  # app/
     service_dir = app_dir.parent  # services/face-recognition/
     
-    # Check locations in order of priority
+    # Check locations in order of priority (prod > default > test)
     candidates = [
+        # Production env files (highest priority)
+        service_dir / ".env.prod",
+        app_dir / ".env.prod",
+        Path.cwd() / ".env.prod",
+        # Default env files
         app_dir / ".env",
         service_dir / ".env",
-        service_dir / ".env.test",
         Path.cwd() / ".env",
+        # Test env files (lowest priority)
+        service_dir / ".env.test",
+        app_dir / ".env.test",
     ]
     
     for path in candidates:
@@ -45,7 +62,7 @@ def _find_env_file() -> Optional[str]:
             print(f"[CONFIG] Found env file: {path}")
             return str(path)
     
-    print(f"[CONFIG] No env file found. Checked: {[str(p) for p in candidates]}")
+    print(f"[CONFIG] No env file found. Using environment variables only.")
     return None
 
 

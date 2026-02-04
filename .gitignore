@@ -105,6 +105,7 @@ apps/facial_recog_web_app/generated/
 
 # Example/allowed files to commit
 !.env.example
+!.env.prod.example
 !docker-compose.*.example
 
 # SSL Certificates and keys
