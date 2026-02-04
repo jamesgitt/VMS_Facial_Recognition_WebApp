@@ -1,213 +1,365 @@
-# Face Recognition ML Microservice
+# Face Recognition API
 
-A modular FastAPI backend for face detection and recognition using ONNX YuNet (detection) and SFace (recognition) models. Integrates with PostgreSQL for persistent visitor storage, leverages HNSWlib for fast nearest neighbor search, and offers both REST and WebSocket endpoints for real-time image processing.
+A production-ready FastAPI microservice for face detection and recognition using ONNX models with HNSW approximate nearest neighbor search.
+
+**Features:**
+- Face detection using YuNet
+- Face recognition using SFace (recommended) or ArcFace
+- HNSW index for fast similarity search (~71k visitors)
+- API key authentication
+- Automatic fallback between recognizers
+- PostgreSQL database integration
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- **Docker & Docker Compose**
-- **Model files** in `app/models/`:
+- Python 3.11+ or Docker
+- Model files in `app/models/`:
   - `face_detection_yunet_2023mar.onnx`
   - `face_recognition_sface_2021dec.onnx`
-- **PostgreSQL** (optional; if not set up, local test_images/ directory is used by default for visitor features)
+  - `arcface.onnx` (optional, for fallback)
 
-### Run via Docker (Recommended)
+### Run with Docker
 
 ```bash
+# Build and start
 docker compose up --build
+
+# Start in background
+docker compose up -d
 ```
-- Access API: http://localhost:8000
-- API docs: http://localhost:8000/docs
-- OpenAPI: http://localhost:8000/openapi.json
 
-### Local Development
-
-1. **Create Python virtualenv:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   cd services/face-recognition
-   pip install -r requirements.txt
-   ```
-
-3. **Download models (if missing):**
-   ```bash
-   python app/ml/download_models.py
-   ```
-
-4. **Environment variables (.env example):**
-   ```env
-   MODELS_PATH=app/models
-   CORS_ORIGINS=http://localhost:3000
-   USE_DATABASE=true
-   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitors_db
-   ```
-   *(Set `USE_DATABASE=false` to use local files instead of Postgres)*
-
-5. **Start API:**
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
----
-
-## 📚 API Reference
-
-### Health & Status
-- `GET /api/v1/health` — Health check
-- `GET /api/v1/models/status`, `/api/v1/models/info` — Model status and info
-- `GET /api/v1/hnsw/status` — ANN index info
-
-### Face Detection & Recognition
-- `POST /api/v1/detect` — Detect faces (`{"image": base64}` or file upload)
-- `POST /api/v1/recognize` — Find closest match (`{"image": base64}`, file upload)
-- `POST /api/v1/compare` — Compare two images (`{"image1": ..., "image2": ...}`)
-- `POST /api/v1/extract-features` — Feature vector for given image
-- `POST /api/v1/validate-image` — Validate image input
-- `WebSocket /ws/realtime` — Bi-directional real-time detection/recognition
-
----
-
-## ⚙️ Configuration
-
-### Key Environment Variables
-
-- `MODELS_PATH`: Path to ONNX models (default `/app/app/models`)
-- `CORS_ORIGINS`: Allowed origins (comma-separated)
-- `USE_DATABASE`: Use Postgres for visitor storage (`true`/`false`)
-- `DATABASE_URL` (or DB_* variables)
-- `YUNET_SCORE_THRESHOLD`, `SFACE_SIMILARITY_THRESHOLD`: Detection/recognition thresholds
-
-### Example cURL Usage
+### Run Locally
 
 ```bash
-# Health check
-curl http://localhost:8000/api/v1/health
+cd services/face-recognition
 
-# Face detection
-curl -X POST http://localhost:8000/api/v1/detect \
-  -H "Content-Type: application/json" \
-  -d '{"image":"..."}'
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or: .\venv\Scripts\Activate.ps1  # Windows
 
-# Face recognition
-curl -X POST http://localhost:8000/api/v1/recognize \
-  -H "Content-Type: application/json" \
-  -d '{"image":"..."}'
+# Install dependencies
+pip install -r requirements.txt
 
-# Compare faces
-curl -X POST http://localhost:8000/api/v1/compare \
-  -H "Content-Type: application/json" \
-  -d '{"image1":"...", "image2":"..."}'
+# Set environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run the server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+API available at: **http://localhost:8000**
+
+### API Documentation
+
+- **Swagger UI:** http://localhost:8000/docs
+- **OpenAPI Schema:** http://localhost:8000/openapi.json
 
 ---
 
-## 🗄️ Database Integration
+## Model Comparison Results
 
-- Uses a `visitors` table:
-  - `id`: PK
-  - `base64Image`: (required)
-  - `facefeatures`: (optional, vector as JSON array)
-- If no DB config is provided, falls back to `test_images/` for demo/testing.
+Based on testing with ~71,500 indexed visitors:
 
-**Batch feature extraction:**
+| Model | Top-1 Accuracy | Best F1 | Speed | Recommended Threshold |
+|-------|---------------|---------|-------|----------------------|
+| **SFace** | **81.71%** | **90.27%** | **2.1x faster** | **0.70** |
+| ArcFace | 73.71% | 84.87% | 1.0x | 0.90 |
+
+**Recommendation:** Use SFace (default) for better accuracy, speed, and storage efficiency.
+
+See [docs/MODEL_COMPARISON_RESULTS.pdf](docs/MODEL_COMPARISON_RESULTS.pdf) for detailed analysis.
+
+---
+
+## API Endpoints
+
+### Public Endpoints (No Auth Required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Basic health check |
+| GET | `/api/v1/health` | Health with recognizer info |
+| GET | `/models/status` | Model loading status |
+| GET | `/models/info` | Model metadata |
+| GET | `/api/v1/hnsw/status` | HNSW index status |
+
+### Protected Endpoints (API Key Required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/detect` | Detect faces in image |
+| POST | `/api/v1/extract-features` | Extract face feature vectors |
+| POST | `/api/v1/compare` | Compare two faces |
+| POST | `/api/v1/recognize` | Recognize visitor from database |
+| POST | `/api/v1/validate-image` | Validate image before processing |
+
+### Authentication
+
+Include API key in request header:
+
 ```bash
-python app/ml/extract_features_to_db.py \
-  --db-host ... --db-name ... --db-user ... --db-password ... --image-dir test_images --batch-size 10
+curl -X POST "http://localhost:8000/api/v1/recognize" \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "base64_image_data"}'
 ```
 
 ---
 
-## 🔍 Approximate Nearest Neighbor (HNSW)
+## Configuration
 
-- HNSW index loads all features for fast search.
-- Persists across restarts; falls back to linear search if index is unavailable.
+### Environment Variables
 
-Check:
+```env
+# API Settings
+API_HOST=0.0.0.0
+API_PORT=8000
+API_DEBUG=false
+
+# Authentication
+API_KEY=your-secure-api-key
+AUTH_ENABLED=true
+
+# CORS
+CORS_ORIGINS=https://your-frontend.com
+
+# Model Settings
+RECOGNIZER_TYPE=sface              # sface or arcface
+SFACE_SIMILARITY_THRESHOLD=0.70    # Recommended for best F1
+ARCFACE_SIMILARITY_THRESHOLD=0.90
+
+# Database
+USE_DATABASE=true
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+# HNSW Index
+HNSW_M=32
+HNSW_EF_CONSTRUCTION=400
+HNSW_EF_SEARCH=400
+```
+
+### Generate API Key
+
 ```bash
-curl http://localhost:8000/api/v1/hnsw/status
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ---
 
-## 📦 File Structure
+## Project Structure
 
 ```
-services/face-recognition/
+face-recognition/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py
-│   ├── face_recog_api.py               # [Legacy, being migrated]
-│   ├── api/
-│   ├── ml/
-│   ├── db/
-│   ├── pipelines/
-│   ├── core/
-│   └── models/
-│       ├── face_detection_yunet_2023mar.onnx
-│       └── face_recognition_sface_2021dec.onnx
-├── test_images/
+│   ├── main.py                 # FastAPI entry point
+│   ├── api/                    # Routes & dependencies
+│   │   ├── routes.py          # HTTP endpoints
+│   │   ├── deps.py            # Auth & dependencies
+│   │   └── websocket.py       # WebSocket detection
+│   ├── core/                   # Core infrastructure
+│   │   ├── config.py          # Pydantic settings
+│   │   ├── logger.py          # Centralized logging
+│   │   ├── exceptions.py      # Custom exceptions
+│   │   └── state.py           # App state management
+│   ├── ml/                     # Machine learning
+│   │   ├── inference.py       # YuNet/SFace inference
+│   │   ├── hnsw_index.py      # HNSW index manager
+│   │   ├── sface_recognizer.py
+│   │   ├── arcface_recognizer.py
+│   │   ├── recognizer_factory.py  # With fallback support
+│   │   └── index_factory.py
+│   ├── db/                     # Database layer
+│   ├── pipelines/              # Business logic
+│   ├── schemas/                # Pydantic models
+│   ├── utils/                  # Utilities
+│   └── models/                 # ONNX model files
+├── scripts/
+│   ├── extract_features_to_db.py   # Feature extraction
+│   ├── rebuild_for_recognizer.py   # Index rebuild
+│   └── convert_md_to_pdf.py        # Documentation
+├── tests/
+│   ├── compare_recognizers.py      # Model comparison
+│   ├── optimize_thresholds.py      # Threshold tuning
+│   ├── test_accuracy.py            # Accuracy testing
+│   └── verify_indexes.py           # Index verification
+├── docs/
+│   ├── MODEL_COMPARISON_RESULTS.md
+│   └── MODEL_COMPARISON_RESULTS.pdf
 ├── Dockerfile
 ├── requirements.txt
-├── README.md
+└── README.md
 ```
 
 ---
 
-## 🐳 Docker Usage
+## Fallback Mechanism
 
-```bash
-docker compose build
-docker compose up
-docker compose logs -f
-docker compose down
-docker compose exec face-recognition-api python app/ml/download_models.py
+The recognizer factory automatically falls back if the primary model fails:
+
+- **RECOGNIZER_TYPE=sface:** SFace → ArcFace (fallback)
+- **RECOGNIZER_TYPE=arcface:** ArcFace → SFace (fallback)
+
+Check fallback status via health endpoint:
+```json
+{
+  "status": "ok",
+  "recognizer": "ArcFace",
+  "feature_dim": 512,
+  "is_fallback": true
+}
 ```
 
 ---
 
-## 🧪 API Testing
+## Scripts
 
-Detect faces:
+### Rebuild HNSW Index
+
 ```bash
-curl -X POST http://localhost:8000/api/v1/detect -F "file=@path/to/image.jpg"
+# Rebuild for SFace (128-dim)
+python scripts/rebuild_for_recognizer.py --recognizer sface
+
+# Rebuild for ArcFace (512-dim)
+python scripts/rebuild_for_recognizer.py --recognizer arcface
 ```
-Recognize face:
+
+### Run Accuracy Tests
+
 ```bash
-curl -X POST http://localhost:8000/api/v1/recognize -F "file=@path/to/image.jpg"
+# Compare models at optimal thresholds
+python tests/compare_recognizers.py --arcface-threshold 0.90 --sface-threshold 0.70
+
+# Optimize thresholds
+python tests/optimize_thresholds.py
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## Docker Commands
 
-### Models not found
-Ensure `app/models/` contains the ONNX files. Download via:
 ```bash
-docker compose run face-recognition-api python app/ml/download_models.py
+docker compose build               # Build image
+docker compose up                  # Start (foreground)
+docker compose up -d               # Start (background)
+docker compose logs -f backend     # View logs
+docker compose down                # Stop and remove
+docker compose restart backend     # Restart service
 ```
-
-### Database issues
-- Ensure DB is running: `docker compose ps postgres`
-- Check `.env` DB settings
-- If DB isn't available, service uses `test_images/`
-
-### Port already in use
-Adjust `ports:` in `docker-compose.yml` as needed.
-
-### HNSW/index issues
-- Check for missing/invalid features
-- See `docker compose logs face-recognition-api`
 
 ---
 
-## 📄 License
+## Integration Example
 
-[Your License Here]
+### JavaScript/TypeScript
+
+```typescript
+const API_URL = 'http://localhost:8000';
+const API_KEY = 'your-api-key';
+
+async function recognizeVisitor(base64Image: string) {
+  const response = await fetch(`${API_URL}/api/v1/recognize-json`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY,
+    },
+    body: JSON.stringify({
+      image: base64Image,
+      threshold: 0.70,
+      top_k: 5,
+    }),
+  });
+  
+  return await response.json();
+}
+```
+
+### Python
+
+```python
+import requests
+
+API_URL = "http://localhost:8000"
+API_KEY = "your-api-key"
+
+def recognize_visitor(base64_image: str):
+    response = requests.post(
+        f"{API_URL}/api/v1/recognize-json",
+        headers={"X-API-Key": API_KEY},
+        json={
+            "image": base64_image,
+            "threshold": 0.70,
+            "top_k": 5,
+        },
+    )
+    return response.json()
+```
+
+---
+
+## Troubleshooting
+
+### Models Not Found
+
+```bash
+# Check models exist
+ls app/models/
+# Expected: face_detection_yunet_2023mar.onnx, face_recognition_sface_2021dec.onnx
+
+# Download models
+python -m app.ml.download_models
+```
+
+### Authentication Errors
+
+```bash
+# Check if API_KEY is set
+echo $API_KEY
+
+# Test with API key
+curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/health
+```
+
+### HNSW Index Issues
+
+```bash
+# Check index status
+curl http://localhost:8000/api/v1/hnsw/status
+
+# Rebuild index
+python scripts/rebuild_for_recognizer.py --recognizer sface
+```
+
+### View Logs
+
+```bash
+# Docker
+docker compose logs -f backend
+
+# Local
+# Logs are printed to stdout with [INFO], [WARNING], [ERROR] prefixes
+```
+
+---
+
+## Performance
+
+| Metric | SFace | ArcFace |
+|--------|-------|---------|
+| Feature Dimension | 128 | 512 |
+| Index File Size | ~37 MB | ~146 MB |
+| Queries/Second | ~25 | ~12 |
+| Top-1 Accuracy | 81.71% | 73.71% |
+
+---
+
+## License
+
+MIT License - See LICENSE file for details.

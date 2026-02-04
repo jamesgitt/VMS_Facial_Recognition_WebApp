@@ -9,7 +9,7 @@ env.test/
 venv/
 venvback/
 ENV/
-.venv
+.venv/
 models/
 
 # Testing
@@ -17,7 +17,7 @@ models/
 .coverage
 htmlcov/
 
-# IDE
+# IDE/Editor
 .vscode/
 .idea/
 *.swp
