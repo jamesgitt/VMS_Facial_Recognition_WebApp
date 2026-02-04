@@ -98,13 +98,17 @@ def extract_features_from_image(
 def extract_single_feature(
     image: np.ndarray,
     face_row: Optional[np.ndarray] = None,
+    min_face_confidence: float = 0.85,
+    min_face_size: int = 50,
 ) -> Optional[np.ndarray]:
     """
-    Extract feature vector from a single face.
+    Extract feature vector from a single face with quality filtering.
     
     Args:
         image: BGR image array
         face_row: Face detection data (if None, will detect first face)
+        min_face_confidence: Minimum detection confidence (0-1)
+        min_face_size: Minimum face width/height in pixels
     
     Returns:
         128-dim feature vector or None
@@ -115,7 +119,39 @@ def extract_single_feature(
             faces = inference.detect_faces(image, return_landmarks=True)
             if faces is None or len(faces) == 0:
                 return None
-            face_row = np.asarray(faces[0])
+            
+            # Select best quality face (highest confidence, good size)
+            best_face = None
+            best_score = 0.0
+            
+            for face in faces:
+                face_arr = np.asarray(face)
+                # Face format: [x, y, w, h, confidence, ...]
+                if len(face_arr) >= 5:
+                    w, h = face_arr[2], face_arr[3]
+                    confidence = face_arr[4] if len(face_arr) > 4 else 1.0
+                    
+                    # Quality checks
+                    if confidence < min_face_confidence:
+                        continue
+                    if w < min_face_size or h < min_face_size:
+                        continue
+                    
+                    # Prefer larger, higher confidence faces
+                    quality_score = confidence * (w * h) ** 0.5
+                    if quality_score > best_score:
+                        best_score = quality_score
+                        best_face = face_arr
+                else:
+                    # Fallback for simple face format
+                    best_face = face_arr
+                    break
+            
+            if best_face is None:
+                logger.debug("No face passed quality filters")
+                return None
+            
+            face_row = best_face
         
         # Extract feature
         feature = inference.extract_face_features(image, np.asarray(face_row))
@@ -127,6 +163,11 @@ def extract_single_feature(
         expected_dim = get_feature_dimension()
         if feature.shape[0] != expected_dim:
             logger.warning(f"Invalid feature dimension: {feature.shape[0]} (expected {expected_dim})")
+            return None
+        
+        # Validate feature quality
+        if not validate_feature(feature, expected_dim):
+            logger.warning("Extracted feature failed validation")
             return None
         
         return feature

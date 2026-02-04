@@ -20,8 +20,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      # Mount models directory (read-only)
-      - ./services/face-recognition/app/models:/app/app/models:ro
+      # Mount models directory (read-write for HNSW index persistence)
+      - ./services/face-recognition/app/models:/app/app/models:rw
     environment:
       # Python settings
       - PYTHONUNBUFFERED=1
@@ -36,7 +36,7 @@ services:
       - AUTH_ENABLED=true
       
       # CORS (set specific origins in production)
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://your-frontend.com}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       
       # Model Settings
       - MODELS_PATH=/app/app/models

@@ -3,8 +3,8 @@
 
 ---
 
-**Version:** 1.2  
-**Last Updated:** June 2024  
+**Version:** 1.3  
+**Last Updated:** February 2026  
 **Maintainer:** VMS Dev Team
 
 ---
@@ -398,12 +398,54 @@ pnpm install
 pnpm dev
 ```
 
-### Docker
+### Docker (Development)
 
 ```bash
 docker compose up -d
 docker compose logs -f backend
 docker compose down
+```
+
+### Docker (Production)
+
+Production deployment uses `docker-compose.prod.yml` with database integration:
+
+```bash
+# 1. Configure environment
+cp services/face-recognition/.env.example services/face-recognition/.env.prod
+# Edit .env.prod with your settings:
+#   - DATABASE_URL: PostgreSQL connection string
+#   - API_KEY: Secure API key for authentication
+#   - CORS_ORIGINS: Allowed frontend origins (comma-separated)
+
+# 2. Build and start
+sudo docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Check health
+curl http://localhost:8000/api/v1/health
+
+# 4. View logs
+sudo docker logs facial_recog_api -f
+
+# 5. Rebuild (if needed)
+sudo docker compose -f docker-compose.prod.yml down
+sudo docker compose -f docker-compose.prod.yml up -d --build
+```
+
+**Important Production Settings:**
+
+| Setting | Description |
+|---------|-------------|
+| `CORS_ORIGINS` | Comma-separated list of allowed origins (no wildcards with credentials) |
+| `API_KEY` | Required for all API requests via `X-API-Key` header |
+| `MODELS_PATH` | Must be `/app/app/models` inside container |
+| Volume mount | Use `:rw` flag to allow HNSW index persistence |
+
+**Volume Configuration:**
+The models directory must be mounted read-write for HNSW index persistence:
+```yaml
+volumes:
+  - ./services/face-recognition/app/models:/app/app/models:rw
 ```
 
 ---
@@ -414,9 +456,141 @@ docker compose down
 |---------------------|------------------------------|-------------------------------------|
 | No face found       | Poor image quality/angle      | Better lighting/position            |
 | Model not found     | Missing ONNX model files      | Run `download_models.py`            |
-| Index missing       | Not enrolled any identities   | Call `/identities/enroll` endpoint  |
+| Index missing       | Not enrolled any identities   | Rebuild HNSW index (see below)      |
 | Low similarity      | Different people              | No action (thresholds OK)           |
-| Memory error        | Too many identities loaded    | Reduce count, optimize RAM usage    |
+| Memory error        | Too many identities loaded    | Use batched loading (see below)     |
+| Wrong matches       | Landmark misalignment         | Ensure dynamic YuNet input size     |
+| Index not saving    | Read-only volume mount        | Use `:rw` flag in docker-compose    |
+
+### Landmark Detection Fix (v1.3)
+
+A critical fix was applied to `inference.py` to ensure YuNet's face detection uses dynamic input sizing. Previously, a fixed input size caused landmark coordinates to be incorrectly scaled, resulting in distorted face alignments and meaningless similarity scores.
+
+**The Fix:** In `detect_faces()`, when `input_size=None` (default), the function now uses the actual image dimensions:
+
+```python
+if input_size is None:
+    frame_h, frame_w = frame.shape[:2]
+    input_size = (frame_w, frame_h)
+```
+
+This ensures landmarks are correctly positioned on the original image, enabling accurate face alignment for feature extraction.
+
+### HNSW Index Rebuild Process
+
+After making changes to feature extraction, you must rebuild the HNSW index to re-extract features for all visitors.
+
+**Option 1: API Endpoint (for small datasets)**
+```bash
+curl -X POST http://localhost:8000/api/v1/hnsw/rebuild \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+**Option 2: Direct Script (for large datasets, recommended)**
+
+Create `run_rebuild.py` in the project root:
+```python
+#!/usr/bin/env python3
+"""Rebuild HNSW index with batched database loading."""
+import sys
+sys.path.insert(0, '/app/app')
+sys.stdout.reconfigure(line_buffering=True)
+
+from datetime import datetime
+from core.config import settings
+from db import database
+from ml.hnsw_index import HNSWIndexManager
+from ml import inference
+from utils import image_loader
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+BATCH_SIZE = 500
+
+def rebuild_with_batches():
+    print(f"HNSW INDEX REBUILD - Started at {datetime.now()}")
+    
+    database.test_connection()
+    
+    hnsw = HNSWIndexManager(
+        dimension=128,
+        recognizer_name='sface',
+        index_dir=str(settings.models_path)
+    )
+    hnsw.clear()
+    
+    # Connect and process in batches
+    conn = psycopg2.connect(str(settings.database.url))
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    table = settings.database.table_name
+    img_col = settings.database.image_column
+    
+    # Get total count
+    cursor.execute(f'SELECT COUNT(*) as cnt FROM {table} WHERE "{img_col}" IS NOT NULL')
+    total = cursor.fetchone()['cnt']
+    
+    offset = 0
+    indexed = 0
+    failed = 0
+    
+    while offset < total:
+        cursor.execute(f'''
+            SELECT id, "firstName", "lastName", "{img_col}"
+            FROM {table}
+            WHERE "{img_col}" IS NOT NULL
+            ORDER BY id LIMIT {BATCH_SIZE} OFFSET {offset}
+        ''')
+        
+        batch = []
+        for row in cursor.fetchall():
+            try:
+                img = image_loader.load_from_base64(row[img_col])
+                if img is None:
+                    failed += 1
+                    continue
+                
+                faces = inference.detect_faces(img, return_landmarks=True)
+                if faces is None or len(faces) == 0:
+                    failed += 1
+                    continue
+                
+                feature = inference.extract_face_features(img, faces[0])
+                if feature is None:
+                    failed += 1
+                    continue
+                
+                batch.append((row['id'], feature, {
+                    'firstName': row.get('firstName', ''),
+                    'lastName': row.get('lastName', '')
+                }))
+            except Exception:
+                failed += 1
+        
+        if batch:
+            indexed += hnsw.add_visitors_batch(batch)
+        
+        offset += BATCH_SIZE
+        print(f"  {offset}/{total} ({100*offset/total:.1f}%) | OK: {indexed} | Fail: {failed}")
+    
+    hnsw.save()
+    cursor.close()
+    conn.close()
+    
+    print(f"REBUILD COMPLETE - Indexed: {indexed}, Failed: {failed}")
+
+if __name__ == '__main__':
+    rebuild_with_batches()
+```
+
+Run inside Docker container:
+```bash
+sudo docker cp run_rebuild.py facial_recog_api:/app/run_rebuild.py
+sudo docker exec -d facial_recog_api sh -c "python -u /app/run_rebuild.py > /app/rebuild.log 2>&1"
+
+# Monitor progress
+sudo docker exec facial_recog_api tail -f /app/rebuild.log
+```
 
 #### Tuning HNSW
 
