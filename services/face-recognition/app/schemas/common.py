@@ -31,15 +31,20 @@ class HealthResponse(BaseModel):
         default=None,
         description="Number of visitors in HNSW index"
     )
+    is_fallback: bool = Field(
+        default=False,
+        description="Whether fallback recognizer is being used"
+    )
     
     class Config:
         json_schema_extra = {
             "example": {
                 "status": "ok",
                 "time": "2024-01-15T10:30:00Z",
-                "recognizer": "ArcFace",
-                "feature_dim": 512,
-                "index_size": 72000
+                "recognizer": "SFace",
+                "feature_dim": 128,
+                "index_size": 72000,
+                "is_fallback": False
             }
         }
 

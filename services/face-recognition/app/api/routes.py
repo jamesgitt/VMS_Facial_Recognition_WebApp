@@ -63,16 +63,19 @@ router = APIRouter()
 @router.get("/api/v1/health", response_model=HealthResponse, tags=["Health"])
 async def health():
     """Health check endpoint with recognizer and index info."""
-    from ml.recognizer_factory import get_recognizer
+    from ml.recognizer_factory import get_recognizer, is_fallback_active
     
     # Get recognizer info
+    recognizer_name = None
+    feature_dim = None
+    is_fallback = False
     try:
         recognizer = get_recognizer()
         recognizer_name = recognizer.name
         feature_dim = recognizer.feature_dim
+        is_fallback = is_fallback_active()
     except Exception:
-        recognizer_name = None
-        feature_dim = None
+        pass
     
     # Get index size
     index_size = None
@@ -87,7 +90,8 @@ async def health():
         time=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         recognizer=recognizer_name,
         feature_dim=feature_dim,
-        index_size=index_size
+        index_size=index_size,
+        is_fallback=is_fallback
     )
 
 
