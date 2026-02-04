@@ -36,7 +36,7 @@ WORKDIR /app/app
 ENV MODELS_PATH=/app/app/models
 
 # Expose both HTTP (8000) and HTTPS (8443) ports
-EXPOSE 8000 8443
+EXPOSE 8000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
