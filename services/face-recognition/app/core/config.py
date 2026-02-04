@@ -403,7 +403,7 @@ class HNSWSettings(BaseSettings):
         description="Number of nearest neighbors to explore during search"
     )
     max_elements: int = Field(
-        default=100000,
+        default=200000,
         description="Maximum number of vectors in index"
     )
     
@@ -585,7 +585,7 @@ Database Settings:
     DB_VISITOR_LIMIT    - Max visitors to load (default: 0 = all)
 
 HNSW Settings:
-    HNSW_MAX_ELEMENTS   - Max vectors in index (default: 100000)
+    HNSW_MAX_ELEMENTS   - Max vectors in index (default: 200000)
     HNSW_M              - Bi-directional links (default: 32)
     HNSW_EF_CONSTRUCTION - Construction candidate list size (default: 400)
     HNSW_EF_SEARCH      - Search candidate list size (default: 400)

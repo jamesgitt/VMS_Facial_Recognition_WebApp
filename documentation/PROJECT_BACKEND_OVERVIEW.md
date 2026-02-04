@@ -317,7 +317,7 @@ services/face-recognition/
 ```env
 DATABASE_URL=postgresql://user:pass@host:5432/db
 DB_TABLE_NAME=public."Visitor"
-HNSW_MAX_ELEMENTS=100000
+HNSW_MAX_ELEMENTS=200000
 HNSW_EF_SEARCH=50
 MODELS_PATH=/app/app/models
 API_HOST=0.0.0.0

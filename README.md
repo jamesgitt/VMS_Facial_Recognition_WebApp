@@ -99,6 +99,16 @@ See [docs/MODEL_COMPARISON_RESULTS.pdf](docs/MODEL_COMPARISON_RESULTS.pdf) for d
 | POST | `/api/v1/recognize` | Recognize visitor from database |
 | POST | `/api/v1/validate-image` | Validate image before processing |
 
+### HNSW Index Management (API Key Required)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/hnsw/add-visitor` | Add single visitor to index (with image) |
+| POST | `/api/v1/hnsw/add-visitor-feature` | Add visitor with pre-extracted feature |
+| POST | `/api/v1/hnsw/rebuild` | Full rebuild from database |
+| POST | `/api/v1/hnsw/sync` | Sync new visitors (incremental update) |
+| DELETE | `/api/v1/hnsw/visitor/{id}` | Remove visitor from index |
+
 ### Authentication
 
 Include API key in request header:
@@ -302,6 +312,33 @@ def recognize_visitor(base64_image: str):
     return response.json()
 ```
 
+### Add New Visitor to Index (After DB Insert)
+
+```python
+# Call this after inserting a new visitor into your database
+def add_visitor_to_index(visitor_id: str, base64_image: str, first_name: str, last_name: str):
+    response = requests.post(
+        f"{API_URL}/api/v1/hnsw/add-visitor",
+        headers={"X-API-Key": API_KEY},
+        json={
+            "visitor_id": visitor_id,
+            "image": base64_image,
+            "first_name": first_name,
+            "last_name": last_name,
+        },
+    )
+    return response.json()
+
+# Or sync multiple new visitors from database
+def sync_new_visitors(visitor_ids: list = None):
+    response = requests.post(
+        f"{API_URL}/api/v1/hnsw/sync",
+        headers={"X-API-Key": API_KEY},
+        json={"visitor_ids": visitor_ids},  # None = sync all new
+    )
+    return response.json()
+```
+
 ---
 
 ## Troubleshooting
@@ -333,7 +370,13 @@ curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/health
 # Check index status
 curl http://localhost:8000/api/v1/hnsw/status
 
-# Rebuild index
+# Rebuild index via API
+curl -X POST "http://localhost:8000/api/v1/hnsw/rebuild" \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"force": true}'
+
+# Or via script
 python scripts/rebuild_for_recognizer.py --recognizer sface
 ```
 

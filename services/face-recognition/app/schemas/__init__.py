@@ -30,6 +30,14 @@ from .common import (
     ValidateImageResponse,
     ErrorResponse,
     WebSocketMessage,
+    # HNSW Management
+    HNSWAddVisitorRequest,
+    HNSWAddVisitorFeatureRequest,
+    HNSWAddVisitorResponse,
+    HNSWRebuildRequest,
+    HNSWRebuildResponse,
+    HNSWSyncRequest,
+    HNSWSyncResponse,
 )
 
 __all__ = [
@@ -56,4 +64,12 @@ __all__ = [
     "ValidateImageResponse",
     "ErrorResponse",
     "WebSocketMessage",
+    # HNSW Management
+    "HNSWAddVisitorRequest",
+    "HNSWAddVisitorFeatureRequest",
+    "HNSWAddVisitorResponse",
+    "HNSWRebuildRequest",
+    "HNSWRebuildResponse",
+    "HNSWSyncRequest",
+    "HNSWSyncResponse",
 ]

@@ -273,6 +273,189 @@ class WebSocketMessage(BaseModel):
     )
 
 
+# =============================================================================
+# HNSW INDEX MANAGEMENT SCHEMAS
+# =============================================================================
+
+class HNSWAddVisitorRequest(BaseModel):
+    """Request model for adding a single visitor to HNSW index."""
+    
+    visitor_id: str = Field(
+        ...,
+        description="Unique visitor identifier"
+    )
+    image: str = Field(
+        ...,
+        description="Base64-encoded face image"
+    )
+    first_name: Optional[str] = Field(
+        default=None,
+        description="Visitor's first name"
+    )
+    last_name: Optional[str] = Field(
+        default=None,
+        description="Visitor's last name"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "visitor_id": "VIS-12345",
+                "image": "base64_encoded_image_data...",
+                "first_name": "John",
+                "last_name": "Doe"
+            }
+        }
+
+
+class HNSWAddVisitorFeatureRequest(BaseModel):
+    """Request model for adding a visitor with pre-extracted feature."""
+    
+    visitor_id: str = Field(
+        ...,
+        description="Unique visitor identifier"
+    )
+    feature: list = Field(
+        ...,
+        description="Pre-extracted feature vector (128 or 512 dimensions)"
+    )
+    first_name: Optional[str] = Field(
+        default=None,
+        description="Visitor's first name"
+    )
+    last_name: Optional[str] = Field(
+        default=None,
+        description="Visitor's last name"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "visitor_id": "VIS-12345",
+                "feature": [0.1, -0.2, 0.3, "...128 or 512 floats..."],
+                "first_name": "John",
+                "last_name": "Doe"
+            }
+        }
+
+
+class HNSWAddVisitorResponse(BaseModel):
+    """Response model for adding a visitor to HNSW index."""
+    
+    success: bool = Field(
+        description="Whether the visitor was added successfully"
+    )
+    visitor_id: str = Field(
+        description="Visitor ID that was processed"
+    )
+    message: str = Field(
+        description="Status message"
+    )
+    index_size: int = Field(
+        description="Current index size after operation"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "visitor_id": "VIS-12345",
+                "message": "Visitor added to HNSW index",
+                "index_size": 72001
+            }
+        }
+
+
+class HNSWRebuildRequest(BaseModel):
+    """Request model for rebuilding HNSW index."""
+    
+    force: bool = Field(
+        default=False,
+        description="Force rebuild even if index exists"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "force": True
+            }
+        }
+
+
+class HNSWRebuildResponse(BaseModel):
+    """Response model for HNSW rebuild operation."""
+    
+    success: bool = Field(
+        description="Whether rebuild was successful"
+    )
+    message: str = Field(
+        description="Status message"
+    )
+    visitors_indexed: int = Field(
+        description="Number of visitors in rebuilt index"
+    )
+    duration_seconds: float = Field(
+        description="Time taken for rebuild in seconds"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "message": "HNSW index rebuilt successfully",
+                "visitors_indexed": 72000,
+                "duration_seconds": 45.3
+            }
+        }
+
+
+class HNSWSyncRequest(BaseModel):
+    """Request model for syncing new visitors to HNSW index."""
+    
+    visitor_ids: Optional[list] = Field(
+        default=None,
+        description="Specific visitor IDs to sync (None = sync all new)"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "visitor_ids": ["VIS-12345", "VIS-12346"]
+            }
+        }
+
+
+class HNSWSyncResponse(BaseModel):
+    """Response model for HNSW sync operation."""
+    
+    success: bool = Field(
+        description="Whether sync was successful"
+    )
+    message: str = Field(
+        description="Status message"
+    )
+    visitors_added: int = Field(
+        description="Number of new visitors added"
+    )
+    visitors_skipped: int = Field(
+        description="Number of visitors skipped (already indexed)"
+    )
+    index_size: int = Field(
+        description="Current index size after sync"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Synced 5 new visitors to HNSW index",
+                "visitors_added": 5,
+                "visitors_skipped": 0,
+                "index_size": 72005
+            }
+        }
+
+
 __all__ = [
     "HealthResponse",
     "ModelStatusResponse",
@@ -283,4 +466,12 @@ __all__ = [
     "ValidateImageResponse",
     "ErrorResponse",
     "WebSocketMessage",
+    # HNSW Management
+    "HNSWAddVisitorRequest",
+    "HNSWAddVisitorFeatureRequest",
+    "HNSWAddVisitorResponse",
+    "HNSWRebuildRequest",
+    "HNSWRebuildResponse",
+    "HNSWSyncRequest",
+    "HNSWSyncResponse",
 ]

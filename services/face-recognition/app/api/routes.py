@@ -38,6 +38,14 @@ from schemas import (
     HNSWStatusResponse,
     ValidateImageRequest,
     ValidateImageResponse,
+    # HNSW Management
+    HNSWAddVisitorRequest,
+    HNSWAddVisitorFeatureRequest,
+    HNSWAddVisitorResponse,
+    HNSWRebuildRequest,
+    HNSWRebuildResponse,
+    HNSWSyncRequest,
+    HNSWSyncResponse,
 )
 
 from pipelines import (
@@ -554,6 +562,338 @@ async def hnsw_status():
             visitors_indexed=0,
             details={"error": str(e)}
         )
+
+
+@router.post("/api/v1/hnsw/add-visitor", response_model=HNSWAddVisitorResponse, tags=["HNSW"])
+async def hnsw_add_visitor(request: HNSWAddVisitorRequest, _: str = Depends(verify_api_key)):
+    """
+    Add a single visitor to the HNSW index.
+    
+    Extracts face features from the provided image and adds to the index.
+    Call this endpoint after creating a new visitor in your database.
+    """
+    import numpy as np
+    from ml.index_factory import get_index
+    from ml import inference
+    
+    try:
+        # Load and validate image
+        img_np = image_loader.load_image(request.image, source_type="base64")
+        image_loader.validate_image_size(
+            (img_np.shape[1], img_np.shape[0]),
+            settings.image.max_size
+        )
+        
+        # Detect face
+        faces = inference.detect_faces(img_np, return_landmarks=True)
+        if faces is None or len(faces) == 0:
+            raise HTTPException(status_code=400, detail="No face detected in image")
+        
+        # Extract features
+        feature = inference.extract_face_features(img_np, np.asarray(faces[0]))
+        if feature is None:
+            raise HTTPException(status_code=500, detail="Failed to extract face features")
+        
+        feature = np.asarray(feature).flatten().astype(np.float32)
+        
+        # Get HNSW manager
+        hnsw_manager = get_index()
+        if hnsw_manager is None:
+            raise HTTPException(status_code=500, detail="HNSW index not initialized")
+        
+        # Check if visitor already exists
+        if request.visitor_id in hnsw_manager.visitor_id_to_index:
+            return HNSWAddVisitorResponse(
+                success=False,
+                visitor_id=request.visitor_id,
+                message="Visitor already exists in index",
+                index_size=hnsw_manager.ntotal
+            )
+        
+        # Add to index
+        metadata = {
+            "firstName": request.first_name,
+            "lastName": request.last_name,
+        }
+        
+        success = hnsw_manager.add_visitor(request.visitor_id, feature, metadata)
+        
+        if success:
+            hnsw_manager.save()
+            logger.info(f"Added visitor {request.visitor_id} to HNSW index")
+        
+        return HNSWAddVisitorResponse(
+            success=success,
+            visitor_id=request.visitor_id,
+            message="Visitor added to HNSW index" if success else "Failed to add visitor",
+            index_size=hnsw_manager.ntotal
+        )
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+    except Exception as e:
+        logger.error(f"Error adding visitor to HNSW: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing error: {e}")
+
+
+@router.post("/api/v1/hnsw/add-visitor-feature", response_model=HNSWAddVisitorResponse, tags=["HNSW"])
+async def hnsw_add_visitor_feature(request: HNSWAddVisitorFeatureRequest, _: str = Depends(verify_api_key)):
+    """
+    Add a visitor with pre-extracted feature vector.
+    
+    Use this when you already have the feature vector (e.g., stored in database).
+    """
+    import numpy as np
+    from ml.index_factory import get_index
+    
+    try:
+        # Get HNSW manager
+        hnsw_manager = get_index()
+        if hnsw_manager is None:
+            raise HTTPException(status_code=500, detail="HNSW index not initialized")
+        
+        # Validate feature dimension
+        feature = np.asarray(request.feature).flatten().astype(np.float32)
+        if feature.shape[0] != hnsw_manager.dimension:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Feature dimension mismatch: got {feature.shape[0]}, expected {hnsw_manager.dimension}"
+            )
+        
+        # Check if visitor already exists
+        if request.visitor_id in hnsw_manager.visitor_id_to_index:
+            return HNSWAddVisitorResponse(
+                success=False,
+                visitor_id=request.visitor_id,
+                message="Visitor already exists in index",
+                index_size=hnsw_manager.ntotal
+            )
+        
+        # Add to index
+        metadata = {
+            "firstName": request.first_name,
+            "lastName": request.last_name,
+        }
+        
+        success = hnsw_manager.add_visitor(request.visitor_id, feature, metadata)
+        
+        if success:
+            hnsw_manager.save()
+            logger.info(f"Added visitor {request.visitor_id} to HNSW index (from feature)")
+        
+        return HNSWAddVisitorResponse(
+            success=success,
+            visitor_id=request.visitor_id,
+            message="Visitor added to HNSW index" if success else "Failed to add visitor",
+            index_size=hnsw_manager.ntotal
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding visitor feature to HNSW: {e}")
+        raise HTTPException(status_code=500, detail=f"Processing error: {e}")
+
+
+@router.post("/api/v1/hnsw/rebuild", response_model=HNSWRebuildResponse, tags=["HNSW"])
+async def hnsw_rebuild(request: HNSWRebuildRequest = None, _: str = Depends(verify_api_key)):
+    """
+    Rebuild the entire HNSW index from database.
+    
+    This is a heavy operation that clears the existing index and rebuilds
+    it from all visitors in the database. Use sparingly.
+    """
+    import time
+    from ml.index_factory import get_index
+    from pipelines.visitor_loader import load_visitors_from_database
+    
+    start_time = time.time()
+    
+    try:
+        hnsw_manager = get_index()
+        if hnsw_manager is None:
+            raise HTTPException(status_code=500, detail="HNSW index not initialized")
+        
+        # Check if rebuild is needed
+        if not (request and request.force) and hnsw_manager.ntotal > 0:
+            return HNSWRebuildResponse(
+                success=False,
+                message="Index already has data. Use force=true to rebuild.",
+                visitors_indexed=hnsw_manager.ntotal,
+                duration_seconds=0.0
+            )
+        
+        # Clear existing index
+        logger.info("Starting HNSW rebuild from database...")
+        hnsw_manager.clear()
+        
+        # Reload from database
+        result = load_visitors_from_database(hnsw_manager)
+        
+        duration = time.time() - start_time
+        
+        if result.success:
+            logger.info(f"HNSW rebuild complete: {result.count} visitors in {duration:.2f}s")
+            return HNSWRebuildResponse(
+                success=True,
+                message=f"HNSW index rebuilt successfully from {result.source}",
+                visitors_indexed=result.count,
+                duration_seconds=round(duration, 2)
+            )
+        else:
+            return HNSWRebuildResponse(
+                success=False,
+                message=f"Rebuild failed: {result.error}",
+                visitors_indexed=0,
+                duration_seconds=round(duration, 2)
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rebuilding HNSW index: {e}")
+        raise HTTPException(status_code=500, detail=f"Rebuild error: {e}")
+
+
+@router.post("/api/v1/hnsw/sync", response_model=HNSWSyncResponse, tags=["HNSW"])
+async def hnsw_sync(request: HNSWSyncRequest = None, _: str = Depends(verify_api_key)):
+    """
+    Sync new visitors from database to HNSW index (incremental update).
+    
+    Only adds visitors that are not already in the index.
+    Much faster than full rebuild for adding new entries.
+    """
+    import numpy as np
+    from ml.index_factory import get_index
+    from db import database
+    from pipelines.feature_extraction import extract_feature_from_visitor_data
+    
+    try:
+        hnsw_manager = get_index()
+        if hnsw_manager is None:
+            raise HTTPException(status_code=500, detail="HNSW index not initialized")
+        
+        db_config = settings.database
+        
+        # Get visitors from database
+        if request and request.visitor_ids:
+            # Sync specific visitors
+            all_visitors = database.get_visitor_images_from_db(
+                table_name=db_config.table_name,
+                visitor_id_column=db_config.visitor_id_column,
+                image_column=db_config.image_column,
+                features_column=db_config.features_column,
+                limit=None,
+            )
+            visitors = [v for v in all_visitors if str(v.get('id', v.get('visitor_id'))) in request.visitor_ids]
+        else:
+            # Sync all visitors not in index
+            visitors = database.get_visitor_images_from_db(
+                table_name=db_config.table_name,
+                visitor_id_column=db_config.visitor_id_column,
+                image_column=db_config.image_column,
+                features_column=db_config.features_column,
+                limit=db_config.visitor_limit,
+            )
+        
+        # Filter to only new visitors (not already in index)
+        existing_ids = set(hnsw_manager.visitor_id_to_index.keys())
+        new_visitors = []
+        skipped = 0
+        
+        for visitor in visitors:
+            visitor_id = str(visitor.get('id', visitor.get('visitor_id', 'unknown')))
+            if visitor_id in existing_ids:
+                skipped += 1
+            else:
+                new_visitors.append(visitor)
+        
+        if not new_visitors:
+            return HNSWSyncResponse(
+                success=True,
+                message="No new visitors to sync",
+                visitors_added=0,
+                visitors_skipped=skipped,
+                index_size=hnsw_manager.ntotal
+            )
+        
+        # Extract features and add to index
+        batch_data = []
+        for visitor in new_visitors:
+            visitor_id = str(visitor.get('id', visitor.get('visitor_id', 'unknown')))
+            try:
+                feature = extract_feature_from_visitor_data(visitor)
+                if feature is not None:
+                    feature = np.asarray(feature).flatten().astype(np.float32)
+                    if feature.shape[0] == hnsw_manager.dimension:
+                        metadata = {
+                            'firstName': visitor.get('firstName', ''),
+                            'lastName': visitor.get('lastName', ''),
+                        }
+                        batch_data.append((visitor_id, feature, metadata))
+            except Exception as e:
+                logger.warning(f"Failed to extract feature for {visitor_id}: {e}")
+        
+        # Add batch to index
+        added = hnsw_manager.add_visitors_batch(batch_data)
+        
+        if added > 0:
+            hnsw_manager.save()
+            logger.info(f"Synced {added} new visitors to HNSW index")
+        
+        return HNSWSyncResponse(
+            success=True,
+            message=f"Synced {added} new visitors to HNSW index",
+            visitors_added=added,
+            visitors_skipped=skipped,
+            index_size=hnsw_manager.ntotal
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing HNSW index: {e}")
+        raise HTTPException(status_code=500, detail=f"Sync error: {e}")
+
+
+@router.delete("/api/v1/hnsw/visitor/{visitor_id}", tags=["HNSW"])
+async def hnsw_remove_visitor(visitor_id: str, _: str = Depends(verify_api_key)):
+    """
+    Remove a visitor from the HNSW index.
+    
+    Note: HNSW doesn't support true deletion. This marks the entry as removed
+    in metadata. For complete removal, rebuild the index.
+    """
+    from ml.index_factory import get_index
+    
+    try:
+        hnsw_manager = get_index()
+        if hnsw_manager is None:
+            raise HTTPException(status_code=500, detail="HNSW index not initialized")
+        
+        if visitor_id not in hnsw_manager.visitor_id_to_index:
+            raise HTTPException(status_code=404, detail=f"Visitor {visitor_id} not found in index")
+        
+        success = hnsw_manager.remove_visitor(visitor_id)
+        
+        if success:
+            hnsw_manager.save()
+            logger.info(f"Removed visitor {visitor_id} from HNSW index")
+        
+        return {
+            "success": success,
+            "visitor_id": visitor_id,
+            "message": "Visitor removed from index" if success else "Failed to remove visitor",
+            "index_size": hnsw_manager.ntotal
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing visitor from HNSW: {e}")
+        raise HTTPException(status_code=500, detail=f"Remove error: {e}")
 
 
 # =============================================================================
