@@ -57,8 +57,9 @@ models/
 *.pb
 *.onnx
 
-# Environment variable files (do not commit real .env!)
+# Environment variable files (do not commit real .env files!)
 .env
+.env.prod
 .env.local
 .env.development
 .env.production
@@ -70,6 +71,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+package-lock.json
+yarn.lock
 pnpm-lock.yaml
 .pnpm-debug.log*
 
