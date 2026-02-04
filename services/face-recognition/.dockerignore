@@ -4,8 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
-env.test/
+.env
+.env.test
+.env.prod
 venv/
 venvback/
 ENV/
