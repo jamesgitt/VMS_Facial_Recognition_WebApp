@@ -1,11 +1,12 @@
 """
 WebSocket Routes
 
-Real-time face detection via WebSocket.
+Real-time face detection via WebSocket with API key authentication.
 """
 
 import json
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Optional
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from core.logger import get_logger
 from core.config import settings
@@ -18,10 +19,43 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-@router.websocket("/ws/realtime")
-async def websocket_face_endpoint(websocket: WebSocket):
+async def authenticate_websocket(
+    websocket: WebSocket,
+    api_key: Optional[str] = None,
+) -> bool:
     """
-    WebSocket endpoint for real-time face detection.
+    Authenticate WebSocket connection using API key.
+    
+    Args:
+        websocket: WebSocket connection
+        api_key: API key from query parameter
+    
+    Returns:
+        True if authenticated, False otherwise
+    """
+    # If auth is disabled, allow all connections
+    if not settings.auth.is_enabled:
+        return True
+    
+    # Check API key from query parameter
+    if api_key and api_key == settings.auth.api_key:
+        return True
+    
+    return False
+
+
+@router.websocket("/ws/realtime")
+async def websocket_face_endpoint(
+    websocket: WebSocket,
+    api_key: Optional[str] = Query(None, alias="api_key"),
+):
+    """
+    WebSocket endpoint for real-time face detection with authentication.
+    
+    Authentication:
+    - Pass API key as query parameter: /ws/realtime?api_key=your-key
+    - Or send auth message first: {"type": "auth", "api_key": "your-key"}
+    - If AUTH_ENABLED=false, no authentication required
     
     Expected message format:
     {
@@ -49,9 +83,65 @@ async def websocket_face_endpoint(websocket: WebSocket):
         "type": "error",
         "error": "Error message"
     }
+    
+    Auth success response:
+    {
+        "type": "auth_success",
+        "message": "Authenticated successfully"
+    }
     """
+    # Check authentication via query parameter first
+    is_authenticated = await authenticate_websocket(websocket, api_key)
+    
+    # Accept connection (we need to accept before we can send/receive)
     await websocket.accept()
-    logger.info("WebSocket connection accepted")
+    
+    # If not authenticated via query param and auth is enabled,
+    # wait for auth message
+    if not is_authenticated and settings.auth.is_enabled:
+        logger.info("WebSocket awaiting authentication...")
+        try:
+            # Wait for auth message (with timeout handled by client)
+            auth_data = await websocket.receive_text()
+            auth_req = json.loads(auth_data)
+            
+            if auth_req.get("type") == "auth":
+                provided_key = auth_req.get("api_key")
+                if provided_key and provided_key == settings.auth.api_key:
+                    is_authenticated = True
+                    await websocket.send_json({
+                        "type": "auth_success",
+                        "message": "Authenticated successfully"
+                    })
+                    logger.info("WebSocket authenticated via message")
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": "Invalid API key"
+                    })
+                    logger.warning("WebSocket authentication failed: invalid API key")
+                    await websocket.close(code=4001, reason="Invalid API key")
+                    return
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "error": "Authentication required. Send: {\"type\": \"auth\", \"api_key\": \"your-key\"}"
+                })
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+                
+        except json.JSONDecodeError:
+            await websocket.send_json({
+                "type": "error",
+                "error": "Invalid JSON. Authentication required."
+            })
+            await websocket.close(code=4001, reason="Invalid auth message")
+            return
+        except WebSocketDisconnect:
+            logger.info("WebSocket disconnected during authentication")
+            return
+    
+    logger.info("WebSocket connection authenticated and accepted")
     
     try:
         while True:
