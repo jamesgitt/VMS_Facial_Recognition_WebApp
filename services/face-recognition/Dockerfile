@@ -35,7 +35,7 @@ WORKDIR /app/app
 
 ENV MODELS_PATH=/app/app/models
 
-# Expose both HTTP (8000) and HTTPS (8443) ports
+# Expose HTTP port
 EXPOSE 8000
 
 # Healthcheck
