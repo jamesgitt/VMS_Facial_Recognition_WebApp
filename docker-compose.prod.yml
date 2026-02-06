@@ -4,10 +4,7 @@
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# Environment variables required:
-#   - DATABASE_URL: PostgreSQL connection string
-#   - API_KEY: API key for authentication
-#   - CORS_ORIGINS: Allowed origins (comma-separated)
+# All configuration is in ./services/face-recognition/.env.prod
 
 services:
   backend:
@@ -19,52 +16,6 @@ services:
       - ./services/face-recognition/.env.prod
     ports:
       - "${API_PORT:-8000}:8000"
-    volumes:
-      # Mount models directory (read-only)
-      - ./services/face-recognition/app/models:/app/app/models:ro
-    environment:
-      # Python settings
-      - PYTHONUNBUFFERED=1
-      
-      # API Settings
-      - API_HOST=0.0.0.0
-      - API_PORT=8000
-      - API_DEBUG=false
-      
-      # Authentication (required for production)
-      - API_KEY=${API_KEY}
-      - AUTH_ENABLED=true
-      
-      # CORS (set specific origins in production)
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://your-frontend.com}
-      
-      # Model Settings
-      - MODELS_PATH=/app/app/models
-      - RECOGNIZER_TYPE=${RECOGNIZER_TYPE:-sface}
-      - SFACE_SIMILARITY_THRESHOLD=${SFACE_SIMILARITY_THRESHOLD:-0.70}
-      
-      # Database (required)
-      - USE_DATABASE=true
-      - DATABASE_URL=${DATABASE_URL}
-      - DB_TABLE_NAME=${DB_TABLE_NAME:-public."Visitor"}
-      - DB_VISITOR_ID_COLUMN=${DB_VISITOR_ID_COLUMN:-id}
-      - DB_IMAGE_COLUMN=${DB_IMAGE_COLUMN:-base64Image}
-      - DB_FEATURES_COLUMN=${DB_FEATURES_COLUMN:-facefeatures}
-      - DB_VISITOR_LIMIT=${DB_VISITOR_LIMIT:-0}
-      
-      # Logging
-      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
-    command: >
-      uvicorn main:app 
-      --host 0.0.0.0 
-      --port 8000
-      --workers ${WORKERS:-1}
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 1800s  # 30 minutes for HNSW index building
     restart: always
     deploy:
       resources:

@@ -119,7 +119,7 @@ detector = property(lambda self: _get_detector())
 
 def detect_faces(
     frame: np.ndarray,
-    input_size: Tuple[int, int] = YUNET_INPUT_SIZE,
+    input_size: Tuple[int, int] = None,
     score_threshold: float = None,
     nms_threshold: float = YUNET_NMS_THRESHOLD,
     return_landmarks: bool = False
@@ -129,7 +129,7 @@ def detect_faces(
 
     Args:
         frame: Input BGR image
-        input_size: Input size for detector
+        input_size: Input size for detector (uses frame size if None for accurate landmarks)
         score_threshold: Detection confidence threshold (uses config default if None)
         nms_threshold: Non-max suppression threshold
         return_landmarks: If True, return full face data with landmarks
@@ -148,7 +148,22 @@ def detect_faces(
     if score_threshold is None:
         score_threshold = settings.models.yunet_score_threshold if settings else YUNET_SCORE_THRESHOLD
     
-    resized = cv2.resize(frame, input_size)
+    # Use frame dimensions for accurate landmark detection (no distortion)
+    # This avoids the aspect ratio mismatch that causes landmark misalignment
+    if input_size is None:
+        # Use actual frame dimensions (width, height)
+        frame_h, frame_w = frame.shape[:2]
+        input_size = (frame_w, frame_h)
+    
+    # Only resize if input_size differs from frame size
+    frame_h, frame_w = frame.shape[:2]
+    if input_size[0] != frame_w or input_size[1] != frame_h:
+        resized = cv2.resize(frame, input_size)
+        needs_rescale = True
+    else:
+        resized = frame
+        needs_rescale = False
+    
     det.setInputSize(input_size)
 
     try:
@@ -160,13 +175,16 @@ def detect_faces(
     if faces is None or len(faces) == 0:
         return None
 
-    # Rescale to original frame size
-    sx = frame.shape[1] / input_size[0]
-    sy = frame.shape[0] / input_size[1]
-    
-    faces_rescaled = faces.astype(np.float32).copy()
-    faces_rescaled[:, [0, 2, 5, 7, 9, 11, 13]] *= sx  # x coords
-    faces_rescaled[:, [1, 3, 6, 8, 10, 12, 14]] *= sy  # y coords
+    # Rescale to original frame size if we resized
+    if needs_rescale:
+        sx = frame_w / input_size[0]
+        sy = frame_h / input_size[1]
+        
+        faces_rescaled = faces.astype(np.float32).copy()
+        faces_rescaled[:, [0, 2, 5, 7, 9, 11, 13]] *= sx  # x coords and width
+        faces_rescaled[:, [1, 3, 6, 8, 10, 12, 14]] *= sy  # y coords and height
+    else:
+        faces_rescaled = faces.astype(np.float32)
 
     if return_landmarks:
         return faces_rescaled

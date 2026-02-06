@@ -181,8 +181,14 @@ def _search_hnsw(
     query_feature: np.ndarray,
     threshold: float,
     top_k: int,
+    rerank_top_n: int = 20,
 ) -> RecognitionResult:
-    """Search using HNSW index."""
+    """
+    Search using HNSW index with optional re-ranking.
+    
+    HNSW returns approximate results. For better accuracy, we re-rank
+    the top candidates using precise OpenCV comparison.
+    """
     hnsw_manager = app_state.hnsw_manager
     
     if hnsw_manager is None or hnsw_manager.ntotal == 0:
@@ -193,13 +199,56 @@ def _search_hnsw(
         )
     
     try:
-        ann_results = hnsw_manager.search(query_feature, k=top_k)
+        # Get more candidates than needed for re-ranking
+        search_k = max(top_k * 2, rerank_top_n * 3, 100)
+        ann_results = hnsw_manager.search(query_feature, k=search_k)
+        
+        if not ann_results:
+            return RecognitionResult(
+                success=True,
+                matched=False,
+                search_method="hnsw"
+            )
+        
+        # Re-rank top candidates using precise comparison
+        rerank_candidates = ann_results[:rerank_top_n]
+        reranked_results = []
+        
+        for visitor_id, approx_similarity, metadata in rerank_candidates:
+            # Get stored feature for precise comparison
+            try:
+                idx = hnsw_manager.visitor_id_to_index.get(visitor_id)
+                if idx is not None and hnsw_manager.index is not None:
+                    # Get the stored feature vector
+                    stored_feature = hnsw_manager.index.get_items([idx])[0]
+                    stored_feature = np.array(stored_feature, dtype=np.float32)
+                    
+                    # Precise comparison using OpenCV recognizer
+                    precise_score, _ = inference.compare_face_features(
+                        query_feature,
+                        stored_feature,
+                        threshold=threshold
+                    )
+                    reranked_results.append((visitor_id, float(precise_score), metadata))
+                else:
+                    # Fallback to approximate score
+                    reranked_results.append((visitor_id, approx_similarity, metadata))
+            except Exception as e:
+                logger.debug(f"Re-rank failed for {visitor_id}: {e}")
+                reranked_results.append((visitor_id, approx_similarity, metadata))
+        
+        # Sort by precise score
+        reranked_results.sort(key=lambda x: x[1], reverse=True)
+        
+        # Add remaining candidates (not re-ranked)
+        remaining = ann_results[rerank_top_n:]
+        all_results = reranked_results + [(vid, sim, meta) for vid, sim, meta in remaining]
         
         matches = []
         best_match = None
         best_score = 0.0
         
-        for visitor_id, similarity, metadata in ann_results:
+        for visitor_id, similarity, metadata in all_results[:top_k]:
             is_match = similarity >= threshold
             match = VisitorMatch(
                 visitor_id=visitor_id,
@@ -220,7 +269,7 @@ def _search_hnsw(
             matched=best_match is not None,
             best_match=best_match,
             matches=matches,
-            search_method="hnsw"
+            search_method="hnsw_reranked"
         )
         
     except Exception as e:

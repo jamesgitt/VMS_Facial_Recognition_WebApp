@@ -114,3 +114,23 @@ apps/facial_recog_web_app/generated/
 # SSL Certificates and keys
 certs/
 *.pem
+
+# Docker installation scripts (should be downloaded, not committed)
+get-docker.sh
+**/get-docker.sh
+
+# Temporary test files and outputs
+*_aligned.jpg
+*_annotated.jpg
+*_crop.jpg
+*_test_results/
+landmark_test_results/
+test_visitor.py
+test_landmarks.py
+run_rebuild.py
+rebuild.log
+tests/
+
+# HNSW index files (regenerated from database)
+hnsw_*.bin
+metadata_*.pkl
