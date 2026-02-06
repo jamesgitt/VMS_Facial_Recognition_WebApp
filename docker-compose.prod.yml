@@ -16,9 +16,6 @@ services:
       - ./services/face-recognition/.env.prod
     ports:
       - "${API_PORT:-8000}:8000"
-    volumes:
-      # Mount models directory (read-write for HNSW index persistence)
-      - ./services/face-recognition/app/models:/app/app/models:rw
     restart: always
     deploy:
       resources:
