@@ -631,12 +631,12 @@ export function FaceRecognitionCamera() {
 
   return (
     <div className="container mx-auto max-w-6xl p-6">
-      <div className="rounded-2xl bg-white p-8 shadow-2xl">
-        <h1 className="mb-2 text-center text-4xl font-bold text-gray-800">
-          🎥 Real-time Face Detection & Recognition
+      <div className="rounded-2xl bg-white p-8 shadow-2xl border border-[#001738]/10">
+        <h1 className="mb-2 text-center text-4xl font-bold text-[#001738]">
+          Real-time Face Detection & Recognition
         </h1>
-        <p className="mb-8 text-center text-gray-600">
-          Using YuNet & Sface Models
+        <p className="mb-8 text-center text-[#001738]/60">
+          VMS Facial Recognition System
         </p>
 
         {/* Video Container */}
@@ -659,31 +659,31 @@ export function FaceRecognitionCamera() {
             onClick={() => handleModeChange("detect")}
             className={`rounded-lg px-6 py-2 font-semibold text-white transition ${
               mode === "detect"
-                ? "bg-purple-600 hover:bg-purple-700"
-                : "bg-gray-400 hover:bg-gray-500"
+                ? "bg-[#001738] hover:bg-[#002855]"
+                : "bg-[#001738]/40 hover:bg-[#001738]/60"
             }`}
           >
-            🔍 Detect Faces
+            Detect Faces
           </button>
           <button
             onClick={() => handleModeChange("compare")}
             className={`rounded-lg px-6 py-2 font-semibold text-white transition ${
               mode === "compare"
-                ? "bg-blue-600 hover:bg-blue-700"
-                : "bg-gray-400 hover:bg-gray-500"
+                ? "bg-[#001738] hover:bg-[#002855]"
+                : "bg-[#001738]/40 hover:bg-[#001738]/60"
             }`}
           >
-            ⚖️ Compare Faces
+            Compare Faces
           </button>
           <button
             onClick={() => handleModeChange("recognize")}
             className={`rounded-lg px-6 py-2 font-semibold text-white transition ${
               mode === "recognize"
-                ? "bg-green-600 hover:bg-green-700"
-                : "bg-gray-400 hover:bg-gray-500"
+                ? "bg-[#ff7200] hover:bg-[#e56600]"
+                : "bg-[#001738]/40 hover:bg-[#001738]/60"
             }`}
           >
-            🎯 Recognize from Database
+            Recognize from Database
           </button>
         </div>
 
@@ -692,14 +692,14 @@ export function FaceRecognitionCamera() {
           <button
             onClick={startCamera}
             disabled={isRunning}
-            className="rounded-lg bg-green-500 px-8 py-3 font-semibold text-white transition hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="rounded-lg bg-[#ff7200] px-8 py-3 font-semibold text-white transition hover:bg-[#e56600] disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             Start Camera
           </button>
           <button
             onClick={stopCamera}
             disabled={!isRunning}
-            className="rounded-lg bg-red-500 px-8 py-3 font-semibold text-white transition hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="rounded-lg bg-[#001738] px-8 py-3 font-semibold text-white transition hover:bg-[#002855] disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             Stop Camera
           </button>
@@ -707,14 +707,14 @@ export function FaceRecognitionCamera() {
             <>
               <button
                 onClick={captureReferenceFace}
-                className="rounded-lg bg-blue-500 px-8 py-3 font-semibold text-white transition hover:bg-blue-600"
+                className="rounded-lg bg-[#001738] px-8 py-3 font-semibold text-white transition hover:bg-[#002855]"
               >
                 Capture Reference Face
               </button>
               {referenceFace && (
                 <button
                   onClick={clearReferenceFace}
-                  className="rounded-lg bg-orange-500 px-8 py-3 font-semibold text-white transition hover:bg-orange-600"
+                  className="rounded-lg bg-[#ff7200] px-8 py-3 font-semibold text-white transition hover:bg-[#e56600]"
                 >
                   Clear Reference
                 </button>
@@ -727,10 +727,10 @@ export function FaceRecognitionCamera() {
         <div
           className={`mb-6 rounded-lg p-4 text-center ${
             isRunning
-              ? "bg-green-50 text-green-800"
+              ? "bg-[#ff7200]/10 text-[#001738] border border-[#ff7200]/30"
               : status.includes("Error")
-              ? "bg-red-50 text-red-800"
-              : "bg-gray-50 text-gray-800"
+              ? "bg-red-50 text-red-800 border border-red-200"
+              : "bg-[#001738]/5 text-[#001738] border border-[#001738]/10"
           }`}
         >
           {status}
@@ -738,36 +738,36 @@ export function FaceRecognitionCamera() {
 
         <div className="mb-6 h-6 text-center">
           {isLoading && (
-            <span className="text-gray-600">Processing frame...</span>
+            <span className="text-[#001738]/60">Processing frame...</span>
           )}
         </div>
 
         {/* Stats */}
         <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="rounded-lg bg-gray-50 p-6 text-center">
-            <div className="text-4xl font-bold text-purple-600">{faceCount}</div>
-            <div className="mt-2 text-gray-600">Faces Detected</div>
+          <div className="rounded-lg bg-[#001738]/5 p-6 text-center border border-[#001738]/10">
+            <div className="text-4xl font-bold text-[#ff7200]">{faceCount}</div>
+            <div className="mt-2 text-[#001738]/70">Faces Detected</div>
           </div>
-          <div className="rounded-lg bg-gray-50 p-6 text-center">
-            <div className="text-4xl font-bold text-purple-600">{fps}</div>
-            <div className="mt-2 text-gray-600">FPS</div>
+          <div className="rounded-lg bg-[#001738]/5 p-6 text-center border border-[#001738]/10">
+            <div className="text-4xl font-bold text-[#ff7200]">{fps}</div>
+            <div className="mt-2 text-[#001738]/70">FPS</div>
           </div>
-          <div className="rounded-lg bg-gray-50 p-6 text-center">
-            <div className="text-4xl font-bold text-purple-600">
+          <div className="rounded-lg bg-[#001738]/5 p-6 text-center border border-[#001738]/10">
+            <div className="text-4xl font-bold text-[#ff7200]">
               {processedFrames}
             </div>
-            <div className="mt-2 text-gray-600">Frames Processed</div>
+            <div className="mt-2 text-[#001738]/70">Frames Processed</div>
           </div>
         </div>
 
         {/* Settings */}
-        <div className="rounded-lg bg-gray-50 p-6">
-          <h3 className="mb-4 text-xl font-semibold text-gray-800">Settings</h3>
+        <div className="rounded-lg bg-[#001738]/5 p-6 border border-[#001738]/10">
+          <h3 className="mb-4 text-xl font-semibold text-[#001738]">Settings</h3>
 
           <div className="mb-4">
-            <label className="mb-2 block text-gray-700">
+            <label className="mb-2 block text-[#001738]/80">
               Detection Threshold:{" "}
-              <span className="font-bold text-purple-600">
+              <span className="font-bold text-[#ff7200]">
                 {detectionThreshold.toFixed(1)}
               </span>
             </label>
@@ -778,14 +778,14 @@ export function FaceRecognitionCamera() {
               step="0.1"
               value={detectionThreshold}
               onChange={(e) => setDetectionThreshold(parseFloat(e.target.value))}
-              className="w-full"
+              className="w-full accent-[#ff7200]"
             />
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-gray-700">
+            <label className="mb-2 block text-[#001738]/80">
               Processing Interval (frames):{" "}
-              <span className="font-bold text-purple-600">{processInterval}</span>
+              <span className="font-bold text-[#ff7200]">{processInterval}</span>
             </label>
             <input
               type="range"
@@ -794,67 +794,67 @@ export function FaceRecognitionCamera() {
               step="1"
               value={processInterval}
               onChange={(e) => setProcessInterval(parseInt(e.target.value))}
-              className="w-full"
+              className="w-full accent-[#ff7200]"
             />
           </div>
 
           <div className="mb-4">
-            <label className="mb-2 block text-gray-700">
+            <label className="mb-2 block text-[#001738]/80">
               API URL:{" "}
-              <span className="font-bold text-purple-600">{apiUrl}</span>
+              <span className="font-bold text-[#ff7200]">{apiUrl}</span>
             </label>
             <input
               type="text"
               value={apiUrl}
               onChange={(e) => setApiUrl(e.target.value)}
-              className="w-full rounded border border-gray-300 px-4 py-2"
+              className="w-full rounded border border-[#001738]/20 px-4 py-2 focus:border-[#ff7200] focus:outline-none focus:ring-1 focus:ring-[#ff7200]"
             />
           </div>
 
           {/* HNSW Status Check */}
-          <div className="mb-4 rounded-lg border-2 border-purple-300 bg-purple-50 p-4">
+          <div className="mb-4 rounded-lg border-2 border-[#001738]/20 bg-[#001738]/5 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <h4 className="font-semibold text-purple-800">HNSW Index Status</h4>
+              <h4 className="font-semibold text-[#001738]">HNSW Index Status</h4>
               <button
                 onClick={checkHNSWStatus}
                 disabled={hnswStatusLoading}
-                className="rounded bg-purple-600 px-3 py-1 text-sm text-white transition hover:bg-purple-700 disabled:bg-gray-400"
+                className="rounded bg-[#001738] px-3 py-1 text-sm text-white transition hover:bg-[#002855] disabled:bg-gray-400"
               >
-                {hnswStatusLoading ? "Checking..." : "🔄 Refresh"}
+                {hnswStatusLoading ? "Checking..." : "Refresh"}
               </button>
             </div>
             {hnswStatus ? (
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold">Status:</span>
+                  <span className="font-semibold text-[#001738]">Status:</span>
                   {hnswStatus.available && hnswStatus.initialized ? (
-                    <span className="rounded bg-green-100 px-2 py-1 text-green-800">
-                      ✓ Active ({hnswStatus.total_vectors} vectors)
+                    <span className="rounded bg-[#ff7200]/20 px-2 py-1 text-[#001738]">
+                      Active ({hnswStatus.total_vectors} vectors)
                     </span>
                   ) : hnswStatus.available ? (
                     <span className="rounded bg-yellow-100 px-2 py-1 text-yellow-800">
-                      ⚠ Available but not initialized
+                      Available but not initialized
                     </span>
                   ) : (
                     <span className="rounded bg-red-100 px-2 py-1 text-red-800">
-                      ✗ Not Available
+                      Not Available
                     </span>
                   )}
                 </div>
                 {hnswStatus.initialized && (
                   <>
                     <div>
-                      <span className="font-semibold">Visitors Indexed:</span>{" "}
-                      <span className="text-purple-600">{hnswStatus.visitors_indexed}</span>
+                      <span className="font-semibold text-[#001738]">Visitors Indexed:</span>{" "}
+                      <span className="text-[#ff7200] font-medium">{hnswStatus.visitors_indexed}</span>
                     </div>
                     <div>
-                      <span className="font-semibold">Total Vectors:</span>{" "}
-                      <span className="text-purple-600">{hnswStatus.total_vectors}</span>
+                      <span className="font-semibold text-[#001738]">Total Vectors:</span>{" "}
+                      <span className="text-[#ff7200] font-medium">{hnswStatus.total_vectors}</span>
                     </div>
                     {hnswStatus.m && (
                       <div>
-                        <span className="font-semibold">HNSW Parameters:</span>{" "}
-                        <span className="text-purple-600">
+                        <span className="font-semibold text-[#001738]">HNSW Parameters:</span>{" "}
+                        <span className="text-[#ff7200] font-medium">
                           M={hnswStatus.m}, ef_construction={hnswStatus.ef_construction}, ef_search={hnswStatus.ef_search}
                         </span>
                       </div>
@@ -870,18 +870,18 @@ export function FaceRecognitionCamera() {
                 )}
               </div>
             ) : (
-              <div className="text-sm text-gray-600">Loading status...</div>
+              <div className="text-sm text-[#001738]/60">Loading status...</div>
             )}
           </div>
 
           {/* Comparison Mode Settings */}
           {mode === "compare" && enableComparison && (
-            <div className="mb-4 rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
-              <h4 className="mb-2 font-semibold text-blue-800">Face Comparison Active</h4>
+            <div className="mb-4 rounded-lg border-2 border-[#001738]/20 bg-[#001738]/5 p-4">
+              <h4 className="mb-2 font-semibold text-[#001738]">Face Comparison Active</h4>
               <div className="mb-2">
-                <label className="mb-2 block text-gray-700">
+                <label className="mb-2 block text-[#001738]/80">
                   Comparison Threshold:{" "}
-                  <span className="font-bold text-purple-600">
+                  <span className="font-bold text-[#ff7200]">
                     {comparisonThreshold.toFixed(3)}
                   </span>
                 </label>
@@ -892,14 +892,14 @@ export function FaceRecognitionCamera() {
                   step="0.01"
                   value={comparisonThreshold}
                   onChange={(e) => setComparisonThreshold(parseFloat(e.target.value))}
-                  className="w-full"
+                  className="w-full accent-[#ff7200]"
                 />
               </div>
               {comparisonResult && (
                 <div className="mt-2">
-                  <div className={`rounded p-2 ${comparisonResult.is_match ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                  <div className={`rounded p-2 ${comparisonResult.is_match ? "bg-[#ff7200]/20 text-[#001738]" : "bg-red-100 text-red-800"}`}>
                     <strong>Similarity:</strong> {(comparisonResult.similarity_score * 100).toFixed(2)}% |{" "}
-                    <strong>Match:</strong> {comparisonResult.is_match ? "Yes ✓" : "No ✗"}
+                    <strong>Match:</strong> {comparisonResult.is_match ? "Yes" : "No"}
                   </div>
                 </div>
               )}
@@ -908,8 +908,8 @@ export function FaceRecognitionCamera() {
 
           {/* Recognition Mode Settings */}
           {mode === "recognize" && (
-            <div className="mb-4 rounded-lg border-2 border-green-300 bg-green-50 p-4">
-              <h4 className="mb-2 font-semibold text-green-800">Database Recognition Active</h4>
+            <div className="mb-4 rounded-lg border-2 border-[#ff7200]/30 bg-[#ff7200]/10 p-4">
+              <h4 className="mb-2 font-semibold text-[#001738]">Database Recognition Active</h4>
               
               {/* Start Recognition Button */}
               <div className="mb-4 flex gap-2">
@@ -917,24 +917,24 @@ export function FaceRecognitionCamera() {
                   <button
                     onClick={startRecognition}
                     disabled={!isRunning}
-                    className="flex-1 rounded-lg bg-green-600 px-6 py-3 font-semibold text-white transition hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="flex-1 rounded-lg bg-[#ff7200] px-6 py-3 font-semibold text-white transition hover:bg-[#e56600] disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
-                    🎯 Start Recognition
+                    Start Recognition
                   </button>
                 ) : (
                   <button
                     onClick={cancelRecognition}
-                    className="flex-1 rounded-lg bg-red-600 px-6 py-3 font-semibold text-white transition hover:bg-red-700"
+                    className="flex-1 rounded-lg bg-[#001738] px-6 py-3 font-semibold text-white transition hover:bg-[#002855]"
                   >
-                    ❌ Cancel Recognition
+                    Cancel Recognition
                   </button>
                 )}
               </div>
               
               <div className="mb-2">
-                <label className="mb-2 block text-gray-700">
+                <label className="mb-2 block text-[#001738]/80">
                   Recognition Threshold:{" "}
-                  <span className="font-bold text-purple-600">
+                  <span className="font-bold text-[#ff7200]">
                     {recognitionThreshold.toFixed(3)}
                   </span>
                 </label>
@@ -945,14 +945,14 @@ export function FaceRecognitionCamera() {
                   step="0.01"
                   value={recognitionThreshold}
                   onChange={(e) => setRecognitionThreshold(parseFloat(e.target.value))}
-                  className="w-full"
+                  className="w-full accent-[#ff7200]"
                 />
               </div>
               {recognitionResult && (
                 <div className="mt-2 space-y-2">
-                  <div className={`rounded p-3 ${recognitionResult.matched ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                  <div className={`rounded p-3 ${recognitionResult.matched ? "bg-[#ff7200]/20 text-[#001738]" : "bg-red-100 text-red-800"}`}>
                     <div className="font-semibold">
-                      {recognitionResult.matched ? "✓ Recognized" : "✗ Not Recognized"}
+                      {recognitionResult.matched ? "Recognized" : "Not Recognized"}
                     </div>
                     {recognitionResult.matched && (
                       <div className="mt-1">
@@ -965,15 +965,15 @@ export function FaceRecognitionCamera() {
                     )}
                   </div>
                   {recognitionResult.matches && recognitionResult.matches.length > 0 && (
-                    <div className="rounded bg-gray-100 p-2">
-                      <div className="text-sm font-semibold text-gray-700">Top Matches:</div>
+                    <div className="rounded bg-[#001738]/5 p-2">
+                      <div className="text-sm font-semibold text-[#001738]">Top Matches:</div>
                       <div className="mt-1 space-y-1">
                         {recognitionResult.matches.slice(0, 5).map((match, idx) => {
                           const matchName = (match.firstName || match.lastName) 
                             ? `${match.firstName ?? ""} ${match.lastName ?? ""}`.trim()
                             : (match.visitor_id ?? match.visitor ?? "Unknown");
                           return (
-                            <div key={idx} className="text-xs text-gray-600">
+                            <div key={idx} className="text-xs text-[#001738]/70">
                               {idx + 1}. {matchName} - 
                               {match.match_score ? ` ${(match.match_score * 100).toFixed(1)}%` : " N/A"}
                               {match.is_match && " ✓"}

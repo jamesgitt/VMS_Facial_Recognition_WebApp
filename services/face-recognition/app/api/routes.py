@@ -779,15 +779,15 @@ async def hnsw_sync(request: HNSWSyncRequest = None, _: str = Depends(verify_api
         
         # Get visitors from database
         if request and request.visitor_ids:
-            # Sync specific visitors
-            all_visitors = database.get_visitor_images_from_db(
+            # Sync specific visitors - use efficient query by IDs
+            logger.info(f"Syncing specific visitors: {request.visitor_ids}")
+            visitors = database.get_visitors_by_ids(
+                visitor_ids=request.visitor_ids,
                 table_name=db_config.table_name,
                 visitor_id_column=db_config.visitor_id_column,
                 image_column=db_config.image_column,
                 features_column=db_config.features_column,
-                limit=None,
             )
-            visitors = [v for v in all_visitors if str(v.get('id', v.get('visitor_id'))) in request.visitor_ids]
         else:
             # Sync all visitors not in index
             visitors = database.get_visitor_images_from_db(

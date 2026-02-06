@@ -3,4 +3,71 @@
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* Custom Color Scheme */
+  --color-primary: #001738;
+  --color-accent: #ff7200;
+  --color-background: #ffffff;
+  --color-text: #001738;
+  --color-text-light: #4a5568;
+  
+  /* Tailwind Custom Colors */
+  --color-navy: #001738;
+  --color-orange: #ff7200;
+  --color-navy-light: #002855;
+  --color-orange-light: #ff8c33;
+  --color-orange-dark: #e56600;
+}
+
+/* Base Styles */
+body {
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+/* Custom Utility Classes */
+.bg-primary { background-color: var(--color-primary); }
+.bg-accent { background-color: var(--color-accent); }
+.text-primary { color: var(--color-primary); }
+.text-accent { color: var(--color-accent); }
+.border-primary { border-color: var(--color-primary); }
+.border-accent { border-color: var(--color-accent); }
+
+/* Button Styles */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-primary:hover {
+  background-color: var(--color-navy-light);
+}
+
+.btn-accent {
+  background-color: var(--color-accent);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-accent:hover {
+  background-color: var(--color-orange-dark);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 2px solid var(--color-primary);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-outline:hover {
+  background-color: var(--color-primary);
+  color: white;
 }

@@ -177,6 +177,59 @@ def get_visitor_details(
             raise
 
 
+def get_visitors_by_ids(
+    visitor_ids: List[str],
+    table_name: str = DEFAULT_TABLE_NAME,
+    visitor_id_column: str = DEFAULT_ID_COLUMN,
+    image_column: str = DEFAULT_IMAGE_COLUMN,
+    features_column: Optional[str] = None,
+) -> List[Dict]:
+    """
+    Get visitors by specific IDs (efficient for syncing individual visitors).
+    
+    Args:
+        visitor_ids: List of visitor IDs to fetch
+        table_name: Name of the visitors table
+        visitor_id_column: Column name for visitor ID
+        image_column: Column name for base64 image
+        features_column: Column name for face features (optional)
+    
+    Returns:
+        List of dictionaries with visitor data
+    """
+    if not visitor_ids:
+        return []
+    
+    with get_connection() as conn:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        id_col = _quote_column(visitor_id_column)
+        img_col = _quote_column(image_column)
+        
+        select_cols = [id_col, img_col, '"firstName"', '"lastName"']
+        if features_column:
+            select_cols.append(_quote_column(features_column))
+        
+        # Use parameterized query with IN clause
+        placeholders = ', '.join(['%s'] * len(visitor_ids))
+        query = f"""
+            SELECT {', '.join(select_cols)}
+            FROM {table_name}
+            WHERE {id_col} IN ({placeholders})
+            AND {img_col} IS NOT NULL
+        """
+        
+        try:
+            cursor.execute(query, tuple(visitor_ids))
+            results = cursor.fetchall()
+            visitors = [dict(row) for row in results]
+            logger.info(f"Retrieved {len(visitors)} visitors by IDs from database")
+            return visitors
+        except psycopg2.Error as e:
+            logger.error(f"Database error: {e}")
+            raise
+
+
 def update_visitor_features(
     visitor_id: str,
     features: np.ndarray,
