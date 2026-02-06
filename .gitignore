@@ -129,6 +129,7 @@ test_visitor.py
 test_landmarks.py
 run_rebuild.py
 rebuild.log
+tests/
 
 # HNSW index files (regenerated from database)
 hnsw_*.bin
